@@ -1,0 +1,14 @@
+{
+  "part": "clip",
+  "variant": "v1",
+  "rev": "r1",
+  "plate": 1,
+  "useAms": true,
+  "amsMapping": [0],
+  "bedType": "textured_pei_plate",
+  "timelapse": false,
+  "flowCali": true,
+  "bedLeveling": true,
+  "vibrationCali": true,
+  "layerInspect": false
+}

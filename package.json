@@ -1,0 +1,55 @@
+{
+  "name": "bambu-mcp",
+  "version": "0.1.0",
+  "description": "LAN MCP for a Bambu Lab P2S (P1S MQTT dialect) with the Imagine Engineer design→print contract",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "bambu-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "DESIGN.md",
+    "AGENTS.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "node --import tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "mcp",
+    "bambu",
+    "bambu-lab",
+    "p2s",
+    "p1s",
+    "lan",
+    "mqtt",
+    "ftps",
+    "imagine"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akashnaren/bambu-mcp.git"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.2",
+    "bambu-js": "^3.0.1",
+    "dotenv": "^16.6.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
