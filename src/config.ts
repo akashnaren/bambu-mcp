@@ -1,4 +1,5 @@
 import { config as loadDotenv } from "dotenv";
+import { parseSafeMode } from "./safe.js";
 import type { Config } from "./types.js";
 
 loadDotenv();
@@ -26,6 +27,7 @@ function normalizeModel(raw: string): Config["model"] {
 /** Load LAN credentials from env. `BAMBU_MOCK=1` skips live secrets. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const mock = env.BAMBU_MOCK === "1" || env.BAMBU_MOCK === "true";
+  const safeMode = parseSafeMode(env.BAMBU_SAFE_MODE);
   if (mock) {
     return {
       ip: env.BAMBU_IP?.trim() || "127.0.0.1",
@@ -33,6 +35,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       serial: env.BAMBU_SERIAL?.trim() || "MOCKSERIAL00000",
       model: normalizeModel(env.BAMBU_MODEL ?? "P1S"),
       mock: true,
+      safeMode,
       slicerBin: env.SLICER_BIN?.trim() || undefined,
     };
   }
@@ -43,6 +46,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     serial: read(env, "BAMBU_SERIAL"),
     model: normalizeModel(env.BAMBU_MODEL ?? "P1S"),
     mock: false,
+    safeMode,
     slicerBin: env.SLICER_BIN?.trim() || undefined,
   };
 }

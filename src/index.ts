@@ -9,11 +9,13 @@ import { createSliceRunner } from "./slice.js";
 async function main(): Promise<void> {
   const cfg = loadConfig();
   const port = cfg.mock ? new MockPrinter() : new BambuLanClient(cfg);
-  const { server } = createServer(port, createSliceRunner(cfg.slicerBin));
+  const { server } = createServer(port, createSliceRunner(cfg.slicerBin), {
+    safeMode: cfg.safeMode,
+  });
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error(
-    `bambu-mcp ${cfg.mock ? "(mock)" : "LAN"} dialect=${cfg.model} host=${cfg.ip}`,
+    `bambu-mcp ${cfg.mock ? "(mock)" : "LAN"} dialect=${cfg.model} host=${cfg.ip} safeMode=${cfg.safeMode ? "on" : "off"}`,
   );
 }
 

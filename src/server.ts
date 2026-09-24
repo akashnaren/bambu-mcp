@@ -1,16 +1,20 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { createTools, type RegisteredTool } from "./tools.js";
+import { createTools, type RegisteredTool, type ToolOptions } from "./tools.js";
 import type { PrinterPort, SliceRunner } from "./types.js";
 
 export const SERVER_NAME = "bambu-mcp";
 export const SERVER_VERSION = "0.1.0";
 
-export function createServer(port: PrinterPort, slice?: SliceRunner): {
+export function createServer(
+  port: PrinterPort,
+  slice?: SliceRunner,
+  options?: ToolOptions,
+): {
   server: McpServer;
   tools: RegisteredTool[];
 } {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
-  const tools = createTools(port, slice);
+  const tools = createTools(port, slice, options);
 
   for (const tool of tools) {
     server.tool(

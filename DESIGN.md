@@ -77,15 +77,29 @@ CLI flags match the shared PrusaSlicer-fork interface (`--slice`, `--export-3mf`
 
 These checks are string/path rules. They do not need a live printer and are unit-tested.
 
+## Safe mode
+
+`BAMBU_SAFE_MODE` defaults to **on** when unset (`src/safe.ts`, applied in `loadConfig`). This is independent of printer Developer Mode: LAN writes can be enabled on the machine and this server still refuses them.
+
+| Safe mode | Tools |
+|---|---|
+| on (default) | `status`, `temps`, `ams`, `list_files`, `capabilities` |
+| on | `upload`, `print`, `pause`, `resume`, `stop`, `slice_hook` throw. `confirm: true` does not bypass the refusal. |
+| off (`BAMBU_SAFE_MODE=0`) | Write tools run, subject to the filename contract and the confirm gate below. |
+
+The refusal tells the operator to set `BAMBU_SAFE_MODE=0` and that write tools still require `confirm: true` plus an explicit human ask. Unrecognized values stay on. The process entrypoint passes `config.safeMode` into the tool layer. `createTools` also defaults the flag to on if a caller omits it.
+
+`status` includes `safeMode`. `capabilities` repeats the flag plus the read, write, and confirm-required lists.
+
 ## Confirm gates
 
-`src/confirm.ts` gates `print`, `pause`, `resume`, and `stop`. The boolean `confirm` must be `true`. Agents:
+`src/confirm.ts` gates `print`, `pause`, `resume`, and `stop` **after** safe mode is off. The boolean `confirm` must be `true`. The server never sets it. Agents:
 
 - Must ask the operator before setting `confirm`.
-- Must not infer confirmation from “looks good” or a previous turn.
+- Must not infer confirmation from “looks good”, a previous turn, or `BAMBU_SAFE_MODE=0`.
 - Must treat a missing/false `confirm` as a hard error, not a prompt to retry silently.
 
-Read tools (`status`, `temps`, `ams`, `list_files`) and `slice_hook` / `upload` are not gated. `upload` still enforces the filename contract so the FTPS cache stays clean.
+Read tools (`status`, `temps`, `ams`, `list_files`, `capabilities`) are not confirm-gated. `slice_hook` and `upload` are not confirm-gated either; safe mode still blocks them until `BAMBU_SAFE_MODE=0`. `upload` enforces the filename contract so the FTPS cache stays clean.
 
 ## Secrets
 
@@ -120,6 +134,7 @@ P2S **Developer Mode** must be on or writes are dropped while reads still succee
 
 ```
 src/config.ts     env → Config (no secrets in args)
+src/safe.ts       BAMBU_SAFE_MODE parse + write refusal
 src/contract.ts   Imagine filename + sidecar
 src/confirm.ts    confirm: true gate
 src/client.ts     bambu-js PrinterController + FileController

@@ -55,6 +55,7 @@ const cfg: Config = {
   serial: "SERIAL",
   model: "P1S",
   mock: false,
+  safeMode: true,
 };
 
 describe("BambuLanClient (bambu-js mocked)", () => {
@@ -137,7 +138,7 @@ describe("config", () => {
       BAMBU_SERIAL: "01P00A1",
       BAMBU_MODEL: "P1S",
     });
-    expect(live).toMatchObject({ ip: "10.0.0.8", mock: false, model: "P1S" });
+    expect(live).toMatchObject({ ip: "10.0.0.8", mock: false, model: "P1S", safeMode: true });
   });
 });
 

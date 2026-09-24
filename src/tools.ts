@@ -11,6 +11,13 @@ import {
   parseSidecar,
   sidecarPathFor,
 } from "./contract.js";
+import {
+  assertSafeModeAllows,
+  CONFIRM_TOOL_NAMES,
+  isWriteTool,
+  READ_TOOL_NAMES,
+  WRITE_TOOL_NAMES,
+} from "./safe.js";
 import type { PrinterPort, PrintSidecar, SliceRunner } from "./types.js";
 
 export interface ToolResult {
@@ -25,6 +32,44 @@ export interface RegisteredTool {
   handler: (args: Record<string, unknown>) => Promise<unknown>;
 }
 
+export interface ToolOptions {
+  /**
+   * Defaults to true so a caller that forgets the flag stays read-only.
+   * The process entrypoint passes `loadConfig().safeMode` (`BAMBU_SAFE_MODE`, default on).
+   */
+  safeMode?: boolean;
+}
+
+const WRITE_TOOL_NOTE =
+  " Blocked while BAMBU_SAFE_MODE is on (the default). Set BAMBU_SAFE_MODE=0 to unlock write tools. print, pause, resume, and stop still require confirm: true plus an explicit human ask. Never auto-confirm.";
+
+function applySafeModePolicy(tool: RegisteredTool, safeMode: boolean): RegisteredTool {
+  if (tool.name === "status") {
+    return {
+      ...tool,
+      description: `${tool.description} Includes safeMode so agents can see whether writes are locked.`,
+      handler: async (args) => {
+        const snapshot = await tool.handler(args);
+        if (snapshot && typeof snapshot === "object") {
+          return { ...(snapshot as Record<string, unknown>), safeMode };
+        }
+        return { snapshot, safeMode };
+      },
+    };
+  }
+
+  if (!isWriteTool(tool.name)) return tool;
+
+  return {
+    ...tool,
+    description: `${tool.description}${WRITE_TOOL_NOTE}`,
+    handler: async (args) => {
+      assertSafeModeAllows(tool.name, safeMode);
+      return tool.handler(args);
+    },
+  };
+}
+
 function loadSidecar(printablePath: string): PrintSidecar {
   const sidecar = sidecarPathFor(printablePath);
   if (!existsSync(sidecar)) return {};
@@ -35,8 +80,13 @@ function jsonOk(value: unknown): unknown {
   return value;
 }
 
-export function createTools(port: PrinterPort, slice?: SliceRunner): RegisteredTool[] {
-  return [
+export function createTools(
+  port: PrinterPort,
+  slice?: SliceRunner,
+  options?: ToolOptions,
+): RegisteredTool[] {
+  const safeMode = options?.safeMode ?? true;
+  const tools: RegisteredTool[] = [
     {
       name: "status",
       description:
@@ -66,6 +116,21 @@ export function createTools(port: PrinterPort, slice?: SliceRunner): RegisteredT
         const dir = typeof args.dir === "string" ? args.dir : "/";
         return jsonOk({ files: await port.listFiles(dir) });
       },
+    },
+    {
+      name: "capabilities",
+      description:
+        "Read-only policy: whether safe mode is on, which tools may run, and which motion tools still need confirm: true after an explicit human ask.",
+      inputSchema: z.object({}),
+      handler: async () =>
+        jsonOk({
+          safeMode,
+          reads: [...READ_TOOL_NAMES],
+          writes: [...WRITE_TOOL_NAMES],
+          confirmRequired: [...CONFIRM_TOOL_NAMES],
+          unlock:
+            "Set BAMBU_SAFE_MODE=0 to allow write tools. print, pause, resume, and stop still require confirm: true plus an explicit human ask.",
+        }),
     },
     {
       name: "upload",
@@ -219,4 +284,5 @@ export function createTools(port: PrinterPort, slice?: SliceRunner): RegisteredT
       },
     },
   ];
+  return tools.map((tool) => applySafeModePolicy(tool, safeMode));
 }

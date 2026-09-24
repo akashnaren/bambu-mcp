@@ -115,5 +115,10 @@ export interface Config {
   /** bambu-js dialect. P2S hardware uses `P1S`. */
   model: "P1S" | "H2D";
   mock: boolean;
+  /**
+   * When true (the default), only read tools run.
+   * `BAMBU_SAFE_MODE=0` is the intentional unlock. Motion tools still need `confirm: true`.
+   */
+  safeMode: boolean;
   slicerBin?: string;
 }
