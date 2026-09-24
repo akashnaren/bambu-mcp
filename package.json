@@ -10,8 +10,9 @@
   "files": [
     "dist/**/*",
     "README.md",
+    "AGENTS.md",
     "DESIGN.md",
-    "AGENTS.md"
+    "harness/**/*"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
