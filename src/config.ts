@@ -1,5 +1,4 @@
 import { config as loadDotenv } from "dotenv";
-import { parseSafeMode } from "./gates.js";
 
 export interface Config {
   ip: string;
@@ -23,6 +22,14 @@ function read(env: NodeJS.ProcessEnv, name: string, fallback?: string): string {
     );
   }
   return value.trim();
+}
+
+/** On unless the operator opts out. Only `0`, `false`, `off`, and `no` unlock writes. */
+export function parseSafeMode(raw: string | undefined): boolean {
+  if (raw === undefined || raw.trim() === "") return true;
+  const value = raw.trim().toLowerCase();
+  if (value === "0" || value === "false" || value === "off" || value === "no") return false;
+  return true;
 }
 
 function normalizeModel(raw: string): Config["model"] {

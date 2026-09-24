@@ -2,10 +2,13 @@ import { FileController, PrinterController } from "bambu-js";
 import type { Config } from "./config.js";
 
 /**
- * bambu-js LAN client: MQTT over TLS :8883 and implicit FTPS :990.
- * P2S has no schema in bambu-js. Use the P1S model and the community
- * `project_file` / pause / resume / stop payloads. Do not invent a protocol.
+ * One MQTT client and one FTPS client for the life of the process.
+ * status / temps / ams share the latest report for a short window
+ * instead of each sending pushall. Startup does not connect.
  */
+
+const REPORT_TTL_MS = 2_000;
+const REPORT_WAIT_MS = 3_000;
 
 export interface PrintReport {
   gcode_state?: string;
@@ -86,15 +89,64 @@ export interface PrinterPort {
   stop(): Promise<void>;
 }
 
+type Mqtt = PrinterController<any>;
+
 function hex6(color: unknown): string | null {
   if (typeof color !== "string" || color.length < 6) return null;
   return `#${color.slice(0, 6).toUpperCase()}`;
 }
 
+function statusFrom(report: PrintReport): StatusSnapshot {
+  return {
+    state: report.gcode_state ?? "UNKNOWN",
+    percent: report.mc_percent ?? null,
+    remainingMin: report.mc_remaining_time ?? null,
+    layer: report.layer_num ?? null,
+    totalLayers: report.total_layer_num ?? null,
+    subtask: report.subtask_name ?? null,
+  };
+}
+
+function tempsFrom(report: PrintReport): TempsSnapshot {
+  return {
+    nozzleC: report.nozzle_temper ?? null,
+    nozzleTargetC: report.nozzle_target_temper ?? null,
+    bedC: report.bed_temper ?? null,
+    bedTargetC: report.bed_target_temper ?? null,
+    chamberC: report.chamber_temper ?? null,
+  };
+}
+
+function amsFrom(report: PrintReport): AmsSnapshot {
+  const ams = report.ams as { ams?: unknown[]; tray_now?: unknown } | undefined;
+  const activeSlot = ams?.tray_now != null ? Number(ams.tray_now) : null;
+  const units: AmsUnit[] = ((ams?.ams ?? []) as Record<string, unknown>[]).map((unit) => ({
+    id: Number(unit.id),
+    humidity: (unit.humidity as string | undefined) ?? null,
+    tempC: (unit.temp as string | undefined) ?? null,
+    slots: ((unit.tray as Record<string, unknown>[]) ?? []).map((tray) => ({
+      slot: Number(tray.id),
+      type: (tray.tray_type as string) || null,
+      colorHex: hex6(tray.tray_color),
+      nozzleMinC: tray.nozzle_temp_min ? Number(tray.nozzle_temp_min) : null,
+      nozzleMaxC: tray.nozzle_temp_max ? Number(tray.nozzle_temp_max) : null,
+      active: activeSlot != null && Number(tray.id) === activeSlot,
+    })),
+  }));
+  return { units, activeSlot };
+}
+
 export class BambuLanClient implements PrinterPort {
-  private controller: PrinterController<any> | null = null;
+  private mqttClient: Mqtt | null = null;
+  private opening: Promise<void> | null = null;
   private latest: PrintReport = {};
+  private reportAt = 0;
+  private pendingReport: Promise<PrintReport> | null = null;
+  private waiters: Array<() => void> = [];
   private seq = 0;
+
+  private ftpClient: FileController | null = null;
+  private ftpTail: Promise<void> = Promise.resolve();
 
   constructor(private readonly cfg: Config) {}
 
@@ -103,98 +155,131 @@ export class BambuLanClient implements PrinterPort {
     return String(this.seq);
   }
 
-  private async mqtt(): Promise<PrinterController<any>> {
-    if (this.controller?.isConnected) return this.controller;
-
-    const controller = PrinterController.create({
-      model: this.cfg.model as any,
+  /** One client for the process. Connect on demand. Never open a second client or a retry loop. */
+  private session(): Mqtt {
+    if (this.mqttClient) return this.mqttClient;
+    const client = PrinterController.create({
+      model: this.cfg.model,
       host: this.cfg.ip,
       accessCode: this.cfg.accessCode,
       serial: this.cfg.serial,
-      options: { autoReconnect: true },
+      options: { autoReconnect: false },
+    }) as Mqtt;
+    client.on("report", (state: { print?: PrintReport }) => {
+      if (!state?.print) return;
+      this.latest = { ...this.latest, ...state.print };
+      this.reportAt = Date.now();
+      const waiting = this.waiters;
+      this.waiters = [];
+      for (const wake of waiting) wake();
     });
+    client.on("error", () => undefined);
+    this.mqttClient = client;
+    return client;
+  }
 
-    controller.on("report", (state: { print?: PrintReport }) => {
-      if (state?.print) this.latest = { ...this.latest, ...state.print };
-    });
-
-    await controller.connect();
-    this.controller = controller;
-    return controller;
+  private async mqtt(): Promise<Mqtt> {
+    const client = this.session();
+    if (client.isConnected) return client;
+    if (!this.opening) {
+      this.opening = client.connect().finally(() => {
+        this.opening = null;
+      });
+    }
+    await this.opening;
+    return client;
   }
 
   private async send(payload: Record<string, unknown>): Promise<void> {
-    const controller = await this.mqtt();
-    await controller.sendCommand(payload);
+    const client = await this.mqtt();
+    await client.sendCommand(payload);
   }
 
-  private async refreshReport(timeoutMs = 3000): Promise<PrintReport> {
-    const controller = await this.mqtt();
-    const got = new Promise<void>((resolve) => {
-      const onReport = () => {
-        controller.off("report", onReport);
-        resolve();
+  private fresh(): boolean {
+    return this.reportAt > 0 && Date.now() - this.reportAt < REPORT_TTL_MS;
+  }
+
+  /** One in-flight pushall. Callers that arrive while it is running share the result. */
+  private async report(): Promise<PrintReport> {
+    await this.mqtt();
+    if (this.fresh()) return this.latest;
+    this.pendingReport ??= this.pushAll().finally(() => {
+      this.pendingReport = null;
+    });
+    return this.pendingReport;
+  }
+
+  private pushAll(): Promise<PrintReport> {
+    return new Promise((resolve) => {
+      let settled = false;
+      let timer: NodeJS.Timeout;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        this.waiters = this.waiters.filter((wake) => wake !== finish);
+        resolve(this.latest);
       };
-      controller.on("report", onReport);
-      setTimeout(() => {
-        controller.off("report", onReport);
-        resolve();
-      }, timeoutMs);
+      timer = setTimeout(finish, REPORT_WAIT_MS);
+      this.waiters.push(finish);
+      void this.send({
+        pushing: { command: "pushall", sequence_id: this.nextSeq(), version: 1, push_target: 1 },
+      }).catch(finish);
     });
-    await controller.sendCommand({
-      pushing: {
-        command: "pushall",
-        sequence_id: this.nextSeq(),
-        version: 1,
-        push_target: 1,
-      },
-    });
-    await got;
-    return this.latest;
   }
 
   async status(): Promise<StatusSnapshot> {
-    const report = await this.refreshReport();
-    return {
-      state: report.gcode_state ?? "UNKNOWN",
-      percent: report.mc_percent ?? null,
-      remainingMin: report.mc_remaining_time ?? null,
-      layer: report.layer_num ?? null,
-      totalLayers: report.total_layer_num ?? null,
-      subtask: report.subtask_name ?? null,
-    };
+    return statusFrom(await this.report());
   }
 
   async temps(): Promise<TempsSnapshot> {
-    const report = await this.refreshReport();
-    return {
-      nozzleC: report.nozzle_temper ?? null,
-      nozzleTargetC: report.nozzle_target_temper ?? null,
-      bedC: report.bed_temper ?? null,
-      bedTargetC: report.bed_target_temper ?? null,
-      chamberC: report.chamber_temper ?? null,
-    };
+    return tempsFrom(await this.report());
   }
 
   async ams(): Promise<AmsSnapshot> {
-    const report = await this.refreshReport();
-    const ams = report.ams as { ams?: unknown[]; tray_now?: unknown } | undefined;
-    const raw = ams?.ams ?? [];
-    const activeSlot = ams?.tray_now != null ? Number(ams.tray_now) : null;
-    const units: AmsUnit[] = (raw as Record<string, unknown>[]).map((unit) => ({
-      id: Number(unit.id),
-      humidity: (unit.humidity as string | undefined) ?? null,
-      tempC: (unit.temp as string | undefined) ?? null,
-      slots: ((unit.tray as Record<string, unknown>[]) ?? []).map((tray) => ({
-        slot: Number(tray.id),
-        type: (tray.tray_type as string) || null,
-        colorHex: hex6(tray.tray_color),
-        nozzleMinC: tray.nozzle_temp_min ? Number(tray.nozzle_temp_min) : null,
-        nozzleMaxC: tray.nozzle_temp_max ? Number(tray.nozzle_temp_max) : null,
-        active: activeSlot != null && Number(tray.id) === activeSlot,
-      })),
-    }));
-    return { units, activeSlot };
+    return amsFrom(await this.report());
+  }
+
+  private ftp(): FileController {
+    if (this.ftpClient) return this.ftpClient;
+    const ftp = FileController.create({
+      host: this.cfg.ip,
+      accessCode: this.cfg.accessCode,
+    });
+    ftp.on("error", () => undefined);
+    this.ftpClient = ftp;
+    return ftp;
+  }
+
+  /** Run FTPS work one at a time on the same login. A failure drops the socket; the next call connects once. */
+  private useFtp<T>(fn: (ftp: FileController) => Promise<T>): Promise<T> {
+    const task = this.ftpTail.then(async () => {
+      const ftp = this.ftp();
+      if (!ftp.isConnected) await ftp.connect();
+      try {
+        return await fn(ftp);
+      } catch (error) {
+        await ftp.disconnect().catch(() => undefined);
+        throw error;
+      }
+    });
+    this.ftpTail = task.then(
+      () => undefined,
+      () => undefined,
+    );
+    return task;
+  }
+
+  async listFiles(dir = "/"): Promise<string[]> {
+    return this.useFtp(async (ftp) => {
+      const entries = await ftp.listDir(dir);
+      return entries.map((entry) => entry.name);
+    });
+  }
+
+  async upload(localPath: string, remoteName: string): Promise<void> {
+    const remote = remoteName.startsWith("/") ? remoteName : `/${remoteName}`;
+    await this.useFtp((ftp) => ftp.uploadFile(localPath, remote));
   }
 
   async pause(): Promise<void> {
@@ -210,16 +295,14 @@ export class BambuLanClient implements PrinterPort {
   }
 
   async startPrint(options: StartPrintOptions): Promise<void> {
-    const base = options.remoteName.replace(/\.[^.]+$/, "");
-    const mapping = options.useAms ? options.amsMapping : [255];
     await this.send({
       print: {
         command: "project_file",
         param: `Metadata/plate_${options.plate}.gcode`,
         url: `ftp:///${options.remoteName}`,
-        subtask_name: base,
+        subtask_name: options.remoteName.replace(/\.[^.]+$/, ""),
         use_ams: options.useAms,
-        ams_mapping: mapping,
+        ams_mapping: options.useAms ? options.amsMapping : [255],
         timelapse: options.timelapse,
         flow_cali: options.flowCali,
         bed_leveling: options.bedLeveling,
@@ -233,30 +316,5 @@ export class BambuLanClient implements PrinterPort {
         subtask_id: "0",
       },
     });
-  }
-
-  private async withFtp<T>(fn: (ftp: FileController) => Promise<T>): Promise<T> {
-    const ftp = FileController.create({
-      host: this.cfg.ip,
-      accessCode: this.cfg.accessCode,
-    });
-    await ftp.connect();
-    try {
-      return await fn(ftp);
-    } finally {
-      await ftp.disconnect().catch(() => undefined);
-    }
-  }
-
-  async listFiles(dir = "/"): Promise<string[]> {
-    return this.withFtp(async (ftp) => {
-      const entries = await ftp.listDir(dir);
-      return entries.map((entry) => entry.name);
-    });
-  }
-
-  async upload(localPath: string, remoteName: string): Promise<void> {
-    const remote = remoteName.startsWith("/") ? remoteName : `/${remoteName}`;
-    await this.withFtp((ftp) => ftp.uploadFile(localPath, remote));
   }
 }

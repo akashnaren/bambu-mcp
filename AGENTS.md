@@ -20,7 +20,7 @@ If a write says "blocked by safe mode", stop. The operator sets `BAMBU_SAFE_MODE
 
 ## Code
 
-`config.ts` → `client.ts` (MQTT :8883, FTPS :990) → `tools.ts` → `gates.ts` (safe mode, then confirm).
+`config.ts` → `client.ts` (one MQTT session, one FTPS session) → `reads.ts` / `writes.ts` → `gates.ts`. `server.ts` registers the tools. `index.ts` does not connect at startup.
 
 ## Tests
 

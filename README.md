@@ -77,6 +77,6 @@ Cursor MCP (`~/.cursor/mcp.json`). `BAMBU_SAFE_MODE` is `1` so the server boots 
 
 ## Code
 
-`config.ts` reads env. `client.ts` is the MQTT/FTPS connection. `tools.ts` is the MCP surface. `gates.ts` is safe mode and `confirm: true`. `contract.ts` is the filename rule. `slice.ts` shells out to the slicer. `index.ts` wires them to stdio.
+`config.ts` reads env. `client.ts` keeps one MQTT session and one FTPS login, and reuses the latest report for `status`, `temps`, and `ams`. `reads.ts` and `writes.ts` are the tools. `gates.ts` is safe mode, then confirm. `server.ts` registers them. `index.ts` starts stdio and does not connect until a tool asks.
 
 `npm test` uses `MockPrinter` and does not open the network.
