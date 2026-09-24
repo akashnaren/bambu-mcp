@@ -1,95 +1,58 @@
-import type {
-  AmsSnapshot,
-  PrinterPort,
-  StartPrintOptions,
-  StatusSnapshot,
-  TempsSnapshot,
-} from "./types.js";
+import type { PrinterPort, StartPrintOptions } from "./client.js";
 
-/** In-memory printer for tests and `BAMBU_MOCK=1`. Never talks to a machine. */
+/** In-memory printer for tests and `BAMBU_MOCK=1`. Never opens a socket. */
 export class MockPrinter implements PrinterPort {
   files = new Set<string>(["bracket-left-r1.gcode.3mf"]);
   started: StartPrintOptions[] = [];
   commands: string[] = [];
-  printState = "IDLE";
+  state = "IDLE";
 
-  snapshot: StatusSnapshot = {
-    state: "IDLE",
-    percent: 0,
-    remainingMin: null,
-    layer: null,
-    totalLayers: null,
-    subtask: null,
-  };
-
-  tempSnapshot: TempsSnapshot = {
-    nozzleC: 25,
-    nozzleTargetC: 0,
-    bedC: 24,
-    bedTargetC: 0,
-    chamberC: 23,
-  };
-
-  amsSnapshot: AmsSnapshot = {
-    activeSlot: 0,
-    units: [
-      {
-        id: 0,
-        humidity: "2",
-        tempC: "25",
-        slots: [
-          {
-            slot: 0,
-            type: "PLA",
-            colorHex: "#00AE42",
-            nozzleMinC: 190,
-            nozzleMaxC: 230,
-            active: true,
-          },
-        ],
-      },
-    ],
-  };
-
-  async status(): Promise<StatusSnapshot> {
-    return { ...this.snapshot, state: this.printState };
+  async status() {
+    return {
+      state: this.state,
+      percent: 0,
+      remainingMin: null,
+      layer: null,
+      totalLayers: null,
+      subtask: null,
+    };
   }
 
-  async temps(): Promise<TempsSnapshot> {
-    return { ...this.tempSnapshot };
+  async temps() {
+    return { nozzleC: 25, nozzleTargetC: 0, bedC: 24, bedTargetC: 0, chamberC: 23 };
   }
 
-  async ams(): Promise<AmsSnapshot> {
-    return this.amsSnapshot;
+  async ams() {
+    return { units: [], activeSlot: null };
   }
 
-  async listFiles(): Promise<string[]> {
+  async listFiles() {
     return [...this.files];
   }
 
-  async upload(_localPath: string, remoteName: string): Promise<void> {
+  async upload(_localPath: string, remoteName: string) {
     this.files.add(remoteName.replace(/^\//, ""));
+    this.commands.push("upload");
   }
 
-  async startPrint(options: StartPrintOptions): Promise<void> {
+  async startPrint(options: StartPrintOptions) {
     this.started.push(options);
-    this.printState = "RUNNING";
-    this.snapshot.subtask = options.remoteName;
+    this.state = "RUNNING";
     this.commands.push("project_file");
   }
 
-  async pause(): Promise<void> {
-    this.printState = "PAUSE";
+  async pause() {
+    this.state = "PAUSE";
     this.commands.push("pause");
   }
 
-  async resume(): Promise<void> {
-    this.printState = "RUNNING";
+  async resume() {
+    this.state = "RUNNING";
     this.commands.push("resume");
   }
 
-  async stop(): Promise<void> {
-    this.printState = "IDLE";
+  async stop() {
+    this.state = "IDLE";
     this.commands.push("stop");
   }
 }

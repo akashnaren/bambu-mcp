@@ -1,6 +1,17 @@
 import { config as loadDotenv } from "dotenv";
-import { parseSafeMode } from "./safe.js";
-import type { Config } from "./types.js";
+import { parseSafeMode } from "./gates.js";
+
+export interface Config {
+  ip: string;
+  accessCode: string;
+  serial: string;
+  /** bambu-js dialect. P2S hardware uses `P1S`. */
+  model: "P1S" | "H2D";
+  mock: boolean;
+  /** True unless the operator set `BAMBU_SAFE_MODE=0`. */
+  safeMode: boolean;
+  slicerBin?: string;
+}
 
 loadDotenv();
 
@@ -24,29 +35,16 @@ function normalizeModel(raw: string): Config["model"] {
   throw new Error(`BAMBU_MODEL must be P1S, P2S, or H2D (got ${raw}). P2S hardware uses P1S.`);
 }
 
-/** Load LAN credentials from env. `BAMBU_MOCK=1` skips live secrets. */
+/** Read printer settings from the environment. `BAMBU_MOCK=1` skips live secrets. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const mock = env.BAMBU_MOCK === "1" || env.BAMBU_MOCK === "true";
-  const safeMode = parseSafeMode(env.BAMBU_SAFE_MODE);
-  if (mock) {
-    return {
-      ip: env.BAMBU_IP?.trim() || "127.0.0.1",
-      accessCode: env.BAMBU_ACCESS_CODE?.trim() || "mock",
-      serial: env.BAMBU_SERIAL?.trim() || "MOCKSERIAL00000",
-      model: normalizeModel(env.BAMBU_MODEL ?? "P1S"),
-      mock: true,
-      safeMode,
-      slicerBin: env.SLICER_BIN?.trim() || undefined,
-    };
-  }
-
   return {
-    ip: read(env, "BAMBU_IP"),
-    accessCode: read(env, "BAMBU_ACCESS_CODE"),
-    serial: read(env, "BAMBU_SERIAL"),
+    ip: mock ? env.BAMBU_IP?.trim() || "127.0.0.1" : read(env, "BAMBU_IP"),
+    accessCode: mock ? env.BAMBU_ACCESS_CODE?.trim() || "mock" : read(env, "BAMBU_ACCESS_CODE"),
+    serial: mock ? env.BAMBU_SERIAL?.trim() || "MOCKSERIAL00000" : read(env, "BAMBU_SERIAL"),
     model: normalizeModel(env.BAMBU_MODEL ?? "P1S"),
-    mock: false,
-    safeMode,
+    mock,
+    safeMode: parseSafeMode(env.BAMBU_SAFE_MODE),
     slicerBin: env.SLICER_BIN?.trim() || undefined,
   };
 }

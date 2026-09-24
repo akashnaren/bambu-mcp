@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { z } from "zod";
-import { assertConfirmed } from "./confirm.js";
+import type { PrinterPort } from "./client.js";
 import {
   assertPrintableArtifact,
   defaultPrintOptions,
@@ -10,20 +10,10 @@ import {
   looksLocal,
   parseSidecar,
   sidecarPathFor,
+  type PrintSidecar,
 } from "./contract.js";
-import {
-  assertSafeModeAllows,
-  CONFIRM_TOOL_NAMES,
-  isWriteTool,
-  READ_TOOL_NAMES,
-  WRITE_TOOL_NAMES,
-} from "./safe.js";
-import type { PrinterPort, PrintSidecar, SliceRunner } from "./types.js";
-
-export interface ToolResult {
-  content: { type: "text"; text: string }[];
-  isError?: boolean;
-}
+import { assertConfirmed, assertSafeMode } from "./gates.js";
+import { runSlice } from "./slice.js";
 
 export interface RegisteredTool {
   name: string;
@@ -32,42 +22,12 @@ export interface RegisteredTool {
   handler: (args: Record<string, unknown>) => Promise<unknown>;
 }
 
-export interface ToolOptions {
-  /**
-   * Defaults to true so a caller that forgets the flag stays read-only.
-   * The process entrypoint passes `loadConfig().safeMode` (`BAMBU_SAFE_MODE`, default on).
-   */
-  safeMode?: boolean;
-}
+const BLOCKED =
+  "Refused until BAMBU_SAFE_MODE=0. Motion tools still need confirm: true after an explicit human ask.";
 
-const WRITE_TOOL_NOTE =
-  " Blocked while BAMBU_SAFE_MODE is on (the default). Set BAMBU_SAFE_MODE=0 to unlock write tools. print, pause, resume, and stop still require confirm: true plus an explicit human ask. Never auto-confirm.";
-
-function applySafeModePolicy(tool: RegisteredTool, safeMode: boolean): RegisteredTool {
-  if (tool.name === "status") {
-    return {
-      ...tool,
-      description: `${tool.description} Includes safeMode so agents can see whether writes are locked.`,
-      handler: async (args) => {
-        const snapshot = await tool.handler(args);
-        if (snapshot && typeof snapshot === "object") {
-          return { ...(snapshot as Record<string, unknown>), safeMode };
-        }
-        return { snapshot, safeMode };
-      },
-    };
-  }
-
-  if (!isWriteTool(tool.name)) return tool;
-
-  return {
-    ...tool,
-    description: `${tool.description}${WRITE_TOOL_NOTE}`,
-    handler: async (args) => {
-      assertSafeModeAllows(tool.name, safeMode);
-      return tool.handler(args);
-    },
-  };
+function guard(tool: string, safeMode: boolean, confirm: unknown): void {
+  assertSafeMode(tool, safeMode);
+  assertConfirmed(tool, confirm);
 }
 
 function loadSidecar(printablePath: string): PrintSidecar {
@@ -76,197 +36,153 @@ function loadSidecar(printablePath: string): PrintSidecar {
   return parseSidecar(JSON.parse(readFileSync(sidecar, "utf8")));
 }
 
-function jsonOk(value: unknown): unknown {
-  return value;
-}
-
 export function createTools(
   port: PrinterPort,
-  slice?: SliceRunner,
-  options?: ToolOptions,
+  options?: { safeMode?: boolean; slicerBin?: string },
 ): RegisteredTool[] {
   const safeMode = options?.safeMode ?? true;
-  const tools: RegisteredTool[] = [
+  const slicerBin = options?.slicerBin;
+
+  return [
     {
       name: "status",
-      description:
-        "Read Bambu LAN print state: gcode_state, progress %, remaining minutes, layer, job name.",
+      description: "Read print state: gcode_state, progress, remaining minutes, layer, job. Includes safeMode.",
       inputSchema: z.object({}),
-      handler: async () => jsonOk(await port.status()),
+      handler: async () => ({ ...(await port.status()), safeMode }),
     },
     {
       name: "temps",
-      description: "Read nozzle / bed / chamber temperatures (°C, current + target).",
+      description: "Read nozzle, bed, and chamber temperatures in °C.",
       inputSchema: z.object({}),
-      handler: async () => jsonOk(await port.temps()),
+      handler: async () => port.temps(),
     },
     {
       name: "ams",
-      description: "Read AMS units and per-slot filament type, color, nozzle range, and active slot.",
+      description: "Read AMS units, filament slots, and the active slot.",
       inputSchema: z.object({}),
-      handler: async () => jsonOk(await port.ams()),
+      handler: async () => port.ams(),
     },
     {
       name: "list_files",
-      description: "List files on the printer FTPS cache (implicit TLS :990).",
+      description: "List files on the printer FTPS cache.",
       inputSchema: z.object({
-        dir: z.string().optional().describe("Remote directory (default /)"),
+        dir: z.string().optional().describe("Remote directory. Default /"),
       }),
-      handler: async (args) => {
-        const dir = typeof args.dir === "string" ? args.dir : "/";
-        return jsonOk({ files: await port.listFiles(dir) });
-      },
-    },
-    {
-      name: "capabilities",
-      description:
-        "Read-only policy: whether safe mode is on, which tools may run, and which motion tools still need confirm: true after an explicit human ask.",
-      inputSchema: z.object({}),
-      handler: async () =>
-        jsonOk({
-          safeMode,
-          reads: [...READ_TOOL_NAMES],
-          writes: [...WRITE_TOOL_NAMES],
-          confirmRequired: [...CONFIRM_TOOL_NAMES],
-          unlock:
-            "Set BAMBU_SAFE_MODE=0 to allow write tools. print, pause, resume, and stop still require confirm: true plus an explicit human ask.",
-        }),
+      handler: async (args) => ({
+        files: await port.listFiles(typeof args.dir === "string" ? args.dir : "/"),
+      }),
     },
     {
       name: "upload",
-      description:
-        "Upload a sliced Imagine artifact over FTPS. File must be {part}-{variant}-{rev}.gcode.3mf. Does not start a print.",
+      description: `Upload a {part}-{variant}-{rev}.gcode.3mf over FTPS. Does not start a print. ${BLOCKED}`,
       inputSchema: z.object({
         localPath: z.string().describe("Local path to the .gcode.3mf"),
-        remoteName: z
-          .string()
-          .optional()
-          .describe("Remote filename (default: local basename)"),
+        remoteName: z.string().optional().describe("Remote filename. Default: local basename"),
       }),
       handler: async (args) => {
+        guard("upload", safeMode, args.confirm);
         const localPath = String(args.localPath);
         if (!existsSync(localPath)) throw new Error(`No such file: ${localPath}`);
         const parsed = assertPrintableArtifact(localPath);
         const remote = args.remoteName ? String(args.remoteName) : parsed.filename;
         assertPrintableArtifact(remote);
         await port.upload(localPath, remote);
-        return jsonOk({ uploaded: remote });
+        return { uploaded: remote };
       },
     },
     {
       name: "print",
-      description:
-        "Start printing a {part}-{variant}-{rev}.gcode.3mf. Refuses bare STL, wip-*, and scratch/. Requires confirm: true after the operator agrees. Optional sibling .print.json supplies plate/AMS defaults.",
+      description: `Start printing a {part}-{variant}-{rev}.gcode.3mf. Refuses .stl, wip-*, and scratch/. ${BLOCKED}`,
       inputSchema: z.object({
-        file: z
-          .string()
-          .describe("Local path or remote filename of the .gcode.3mf"),
-        confirm: z
-          .boolean()
-          .describe("Must be true. Ask the operator before setting this."),
+        file: z.string().describe("Local path or remote filename of the .gcode.3mf"),
+        confirm: z.boolean().describe("Must be true. Ask the operator before setting this."),
         plate: z.number().int().optional(),
         useAms: z.boolean().optional(),
         amsMapping: z.array(z.number().int()).optional(),
-        alreadyUploaded: z
-          .boolean()
-          .optional()
-          .describe("If true, skip FTPS upload and print the remote name."),
+        alreadyUploaded: z.boolean().optional().describe("Skip FTPS upload and print the remote name."),
       }),
       handler: async (args) => {
-        assertConfirmed("print", args.confirm);
+        guard("print", safeMode, args.confirm);
         const file = String(args.file);
         const artifact = assertPrintableArtifact(file);
         const local = looksLocal(file) && existsSync(file);
         const sidecar = local ? loadSidecar(file) : {};
-        const options = defaultPrintOptions(artifact.filename, sidecar);
-        if (typeof args.plate === "number") options.plate = args.plate;
-        if (typeof args.useAms === "boolean") options.useAms = args.useAms;
-        if (Array.isArray(args.amsMapping)) options.amsMapping = args.amsMapping as number[];
-
+        const job = defaultPrintOptions(artifact.filename, sidecar);
+        if (typeof args.plate === "number") job.plate = args.plate;
+        if (typeof args.useAms === "boolean") job.useAms = args.useAms;
+        if (Array.isArray(args.amsMapping)) job.amsMapping = args.amsMapping as number[];
         if (local && args.alreadyUploaded !== true) {
           await port.upload(file, artifact.filename);
         }
-        await port.startPrint(options);
-        return jsonOk({ printing: artifact.filename, ...options, confirmed: true });
+        await port.startPrint(job);
+        return { printing: artifact.filename, ...job, confirmed: true };
       },
     },
     {
       name: "pause",
-      description: "Pause the running print. Requires confirm: true.",
+      description: `Pause the running print. ${BLOCKED}`,
       inputSchema: z.object({
         confirm: z.boolean().describe("Must be true after the operator agrees."),
       }),
       handler: async (args) => {
-        assertConfirmed("pause", args.confirm);
+        guard("pause", safeMode, args.confirm);
         await port.pause();
-        return jsonOk({ ok: "paused", confirmed: true });
+        return { ok: "paused", confirmed: true };
       },
     },
     {
       name: "resume",
-      description: "Resume a paused print. Requires confirm: true.",
+      description: `Resume a paused print. ${BLOCKED}`,
       inputSchema: z.object({
         confirm: z.boolean().describe("Must be true after the operator agrees."),
       }),
       handler: async (args) => {
-        assertConfirmed("resume", args.confirm);
+        guard("resume", safeMode, args.confirm);
         await port.resume();
-        return jsonOk({ ok: "resumed", confirmed: true });
+        return { ok: "resumed", confirmed: true };
       },
     },
     {
       name: "stop",
-      description: "Cancel the running print (not resumable). Requires confirm: true.",
+      description: `Cancel the running print. ${BLOCKED}`,
       inputSchema: z.object({
         confirm: z.boolean().describe("Must be true after the operator agrees."),
       }),
       handler: async (args) => {
-        assertConfirmed("stop", args.confirm);
+        guard("stop", safeMode, args.confirm);
         await port.stop();
-        return jsonOk({ ok: "stopped", confirmed: true });
+        return { ok: "stopped", confirmed: true };
       },
     },
     {
       name: "slice_hook",
-      description:
-        "Slice an STL or mesh-only 3MF into {part}-{variant}-{rev}.gcode.3mf via OrcaSlicer / Bambu Studio CLI. Does not upload or print. Bare STL is allowed here only.",
+      description: `Slice an STL or mesh 3MF to {part}-{variant}-{rev}.gcode.3mf. Does not upload or print. ${BLOCKED}`,
       inputSchema: z.object({
-        inputPath: z.string().describe("Local .stl / .step / mesh .3mf"),
+        inputPath: z.string().describe("Local .stl, .step, .obj, or mesh .3mf"),
         part: z.string(),
         variant: z.string(),
         rev: z.string(),
         outputDir: z.string().optional(),
-        settings: z
-          .string()
-          .optional()
-          .describe("Semicolon-joined printer;process JSON presets (required for bare STL)"),
+        settings: z.string().optional().describe("Semicolon-joined printer;process presets. Required for a bare STL."),
         filaments: z.string().optional(),
         plate: z.number().int().optional(),
         arrange: z.boolean().optional(),
         orient: z.boolean().optional(),
       }),
       handler: async (args) => {
-        if (!slice) {
-          throw new Error("slice_hook is not configured (no SliceRunner). Set SLICER_BIN.");
-        }
+        guard("slice_hook", safeMode, args.confirm);
         const inputPath = String(args.inputPath);
         if (!existsSync(inputPath)) throw new Error(`No such file: ${inputPath}`);
         if (!isSliceableInput(inputPath)) {
-          throw new Error(`slice_hook accepts .stl / .step / .obj / .3mf, got ${basename(inputPath)}`);
+          throw new Error(`slice_hook accepts .stl, .step, .obj, or .3mf, got ${basename(inputPath)}`);
         }
-        const filename = formatPrintableName(
-          String(args.part),
-          String(args.variant),
-          String(args.rev),
-        );
+        const filename = formatPrintableName(String(args.part), String(args.variant), String(args.rev));
         const outputDir = typeof args.outputDir === "string" ? args.outputDir : ".";
         const outputPath = join(outputDir, filename);
         if (/\.stl$/i.test(inputPath) && !args.settings) {
-          throw new Error(
-            "Bare STL needs slicer presets. Export printer+process JSON from Bambu Studio / OrcaSlicer and pass settings.",
-          );
+          throw new Error("Bare STL needs slicer presets in settings (printer JSON;process JSON).");
         }
-        const result = await slice.run({
+        const result = await runSlice(slicerBin, {
           inputPath,
           outputPath,
           plate: typeof args.plate === "number" ? args.plate : 0,
@@ -275,14 +191,13 @@ export function createTools(
           arrange: args.arrange !== false,
           orient: args.orient !== false,
         });
-        return jsonOk({
+        return {
           output: result.output,
           cmd: result.cmd,
           artifact: filename,
           printJsonHint: sidecarPathFor(outputPath),
-        });
+        };
       },
     },
   ];
-  return tools.map((tool) => applySafeModePolicy(tool, safeMode));
 }

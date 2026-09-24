@@ -1,18 +1,25 @@
 import { basename, dirname, sep } from "node:path";
-import type { PrintSidecar } from "./types.js";
 
-/**
- * Imagine Engineer printable artifact:
- *   `{part}-{variant}-{rev}.gcode.3mf`
- * plus optional sibling `{part}-{variant}-{rev}.print.json`.
- */
-export const PRINTABLE_NAME =
+/** Optional sibling of `{part}-{variant}-{rev}.gcode.3mf`. */
+export interface PrintSidecar {
+  part?: string;
+  variant?: string;
+  rev?: string;
+  plate?: number;
+  useAms?: boolean;
+  amsMapping?: number[];
+  bedType?: string;
+  timelapse?: boolean;
+  flowCali?: boolean;
+  bedLeveling?: boolean;
+  vibrationCali?: boolean;
+  layerInspect?: boolean;
+}
+
+const PRINTABLE_NAME =
   /^(?<part>[A-Za-z0-9][A-Za-z0-9_]*)-(?<variant>[A-Za-z0-9][A-Za-z0-9_]*)-(?<rev>[A-Za-z0-9][A-Za-z0-9_]*)\.gcode\.3mf$/;
 
-export const SIDECAR_NAME =
-  /^(?<part>[A-Za-z0-9][A-Za-z0-9_]*)-(?<variant>[A-Za-z0-9][A-Za-z0-9_]*)-(?<rev>[A-Za-z0-9][A-Za-z0-9_]*)\.print\.json$/;
-
-export const MESH_INPUT = /\.(stl|step|stp|obj|3mf)$/i;
+const MESH_INPUT = /\.(stl|step|stp|obj|3mf)$/i;
 
 export interface ArtifactName {
   part: string;
@@ -21,7 +28,7 @@ export interface ArtifactName {
   filename: string;
 }
 
-export function parsePrintableName(filename: string): ArtifactName | null {
+function parsePrintableName(filename: string): ArtifactName | null {
   const match = PRINTABLE_NAME.exec(basename(filename));
   if (!match?.groups) return null;
   return {
@@ -50,19 +57,19 @@ function pathSegments(filePath: string): string[] {
   return filePath.split(/[\\/]+/).filter(Boolean);
 }
 
-export function isScratchPath(filePath: string): boolean {
+function isScratchPath(filePath: string): boolean {
   return pathSegments(filePath).some((segment) => segment.toLowerCase() === "scratch");
 }
 
-export function isWipName(filePath: string): boolean {
+function isWipName(filePath: string): boolean {
   return basename(filePath).toLowerCase().startsWith("wip-");
 }
 
-export function isBareStl(filePath: string): boolean {
+function isBareStl(filePath: string): boolean {
   return /\.stl$/i.test(filePath);
 }
 
-export function isMeshOnly3mf(filePath: string): boolean {
+function isMeshOnly3mf(filePath: string): boolean {
   return /\.3mf$/i.test(filePath) && !/\.gcode\.3mf$/i.test(filePath);
 }
 
@@ -70,10 +77,6 @@ export function isSliceableInput(filePath: string): boolean {
   return MESH_INPUT.test(filePath);
 }
 
-/**
- * Gate for start-print (and upload of a print job).
- * Refuses bare STL, `wip-*` names, and anything under `scratch/`.
- */
 export function assertPrintableArtifact(filePath: string): ArtifactName {
   if (isScratchPath(filePath)) {
     throw new Error(

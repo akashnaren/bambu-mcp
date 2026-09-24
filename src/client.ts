@@ -1,27 +1,89 @@
 import { FileController, PrinterController } from "bambu-js";
-import type {
-  AmsSnapshot,
-  AmsUnit,
-  Config,
-  PrintReport,
-  PrinterPort,
-  StartPrintOptions,
-  StatusSnapshot,
-  TempsSnapshot,
-} from "./types.js";
+import type { Config } from "./config.js";
 
 /**
- * LAN client wrapping community bambu-js (MQTT :8883 + implicit FTPS :990).
- *
- * bambu-js is push-based: connect, cache `report` events, `sendCommand` for
- * writes. P2S has no typed schema — use BAMBU_MODEL=P1S and the community
- * X1/P1 `project_file` / pause / resume / stop payloads (same family Home
- * Assistant and OrcaSlicer use). Do not invent a new protocol.
+ * bambu-js LAN client: MQTT over TLS :8883 and implicit FTPS :990.
+ * P2S has no schema in bambu-js. Use the P1S model and the community
+ * `project_file` / pause / resume / stop payloads. Do not invent a protocol.
  */
 
-export interface LanClientDeps {
-  PrinterController: typeof PrinterController;
-  FileController: typeof FileController;
+export interface PrintReport {
+  gcode_state?: string;
+  mc_percent?: number;
+  mc_remaining_time?: number;
+  nozzle_temper?: number;
+  nozzle_target_temper?: number;
+  bed_temper?: number;
+  bed_target_temper?: number;
+  chamber_temper?: number;
+  subtask_name?: string;
+  layer_num?: number;
+  total_layer_num?: number;
+  ams?: unknown;
+  [key: string]: unknown;
+}
+
+export interface StatusSnapshot {
+  state: string;
+  percent: number | null;
+  remainingMin: number | null;
+  layer: number | null;
+  totalLayers: number | null;
+  subtask: string | null;
+}
+
+export interface TempsSnapshot {
+  nozzleC: number | null;
+  nozzleTargetC: number | null;
+  bedC: number | null;
+  bedTargetC: number | null;
+  chamberC: number | null;
+}
+
+export interface AmsSlot {
+  slot: number;
+  type: string | null;
+  colorHex: string | null;
+  nozzleMinC: number | null;
+  nozzleMaxC: number | null;
+  active: boolean;
+}
+
+export interface AmsUnit {
+  id: number;
+  humidity: string | null;
+  tempC: string | null;
+  slots: AmsSlot[];
+}
+
+export interface AmsSnapshot {
+  units: AmsUnit[];
+  activeSlot: number | null;
+}
+
+export interface StartPrintOptions {
+  remoteName: string;
+  plate: number;
+  useAms: boolean;
+  amsMapping: number[];
+  bedType: string;
+  timelapse: boolean;
+  flowCali: boolean;
+  bedLeveling: boolean;
+  vibrationCali: boolean;
+  layerInspect: boolean;
+}
+
+export interface PrinterPort {
+  status(): Promise<StatusSnapshot>;
+  temps(): Promise<TempsSnapshot>;
+  ams(): Promise<AmsSnapshot>;
+  listFiles(dir?: string): Promise<string[]>;
+  upload(localPath: string, remoteName: string): Promise<void>;
+  startPrint(options: StartPrintOptions): Promise<void>;
+  pause(): Promise<void>;
+  resume(): Promise<void>;
+  stop(): Promise<void>;
 }
 
 function hex6(color: unknown): string | null {
@@ -34,10 +96,7 @@ export class BambuLanClient implements PrinterPort {
   private latest: PrintReport = {};
   private seq = 0;
 
-  constructor(
-    private readonly cfg: Config,
-    private readonly deps: LanClientDeps = { PrinterController, FileController },
-  ) {}
+  constructor(private readonly cfg: Config) {}
 
   private nextSeq(): string {
     this.seq += 1;
@@ -47,7 +106,7 @@ export class BambuLanClient implements PrinterPort {
   private async mqtt(): Promise<PrinterController<any>> {
     if (this.controller?.isConnected) return this.controller;
 
-    const controller = this.deps.PrinterController.create({
+    const controller = PrinterController.create({
       model: this.cfg.model as any,
       host: this.cfg.ip,
       accessCode: this.cfg.accessCode,
@@ -69,7 +128,7 @@ export class BambuLanClient implements PrinterPort {
     await controller.sendCommand(payload);
   }
 
-  async refreshReport(timeoutMs = 3000): Promise<PrintReport> {
+  private async refreshReport(timeoutMs = 3000): Promise<PrintReport> {
     const controller = await this.mqtt();
     const got = new Promise<void>((resolve) => {
       const onReport = () => {
@@ -119,9 +178,7 @@ export class BambuLanClient implements PrinterPort {
 
   async ams(): Promise<AmsSnapshot> {
     const report = await this.refreshReport();
-    const ams = report.ams as
-      | { ams?: unknown[]; tray_now?: unknown }
-      | undefined;
+    const ams = report.ams as { ams?: unknown[]; tray_now?: unknown } | undefined;
     const raw = ams?.ams ?? [];
     const activeSlot = ams?.tray_now != null ? Number(ams.tray_now) : null;
     const units: AmsUnit[] = (raw as Record<string, unknown>[]).map((unit) => ({
@@ -152,10 +209,6 @@ export class BambuLanClient implements PrinterPort {
     await this.send({ print: { command: "stop", sequence_id: this.nextSeq() } });
   }
 
-  /**
-   * Community LAN `project_file` payload. File must already be on FTPS cache.
-   * Verified against P1-family MQTT; treat P2S start-print as the same dialect.
-   */
   async startPrint(options: StartPrintOptions): Promise<void> {
     const base = options.remoteName.replace(/\.[^.]+$/, "");
     const mapping = options.useAms ? options.amsMapping : [255];
@@ -183,7 +236,7 @@ export class BambuLanClient implements PrinterPort {
   }
 
   private async withFtp<T>(fn: (ftp: FileController) => Promise<T>): Promise<T> {
-    const ftp = this.deps.FileController.create({
+    const ftp = FileController.create({
       host: this.cfg.ip,
       accessCode: this.cfg.accessCode,
     });
