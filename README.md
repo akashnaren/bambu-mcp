@@ -75,6 +75,16 @@ Cursor MCP (`~/.cursor/mcp.json`). `BAMBU_SAFE_MODE` is `1` so the server boots 
 
 `print` and `upload` accept only `{part}-{variant}-{rev}.gcode.3mf`. They refuse a bare `.stl`, a mesh-only `.3mf`, a `wip-*` name, and any `scratch/` path. A sibling `{part}-{variant}-{rev}.print.json` can set plate, AMS, and calibration. Tool arguments override it.
 
+## Harness
+
+`harness/SKILL.md` is the shared print checklist. It ships in the repo, so a friend clones the same tree. It is not tied to one assistant.
+
+1. Clone this repo, `npm install`, `npm test`, `npm run build`.
+2. Register the MCP with `BAMBU_SAFE_MODE` at `1` (the block above). They set it to `0` only when they mean to allow writes.
+3. Point the assistant at `harness/SKILL.md`. Cursor follows `AGENTS.md`, which links that file. Claude and other clients can load the same file as a project skill (`name` and `description` are in the frontmatter).
+
+The skill will not start motion until safe mode is off and the operator agrees. Printer notes that are not the filename rule live in `harness/references/printer.md`. The filename rule is [DESIGN.md](DESIGN.md).
+
 ## Code
 
 `config.ts` reads env. `client.ts` keeps one MQTT session and one FTPS login, and reuses the latest report for `status`, `temps`, and `ams`. `reads.ts` and `writes.ts` are the tools. `gates.ts` is safe mode, then confirm. `server.ts` registers them. `index.ts` starts stdio and does not connect until a tool asks.
