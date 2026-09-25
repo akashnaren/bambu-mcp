@@ -5,7 +5,7 @@ import { toolGate } from "../gates.js";
 import { MockPrinter } from "../mock.js";
 import { createTools } from "../tools.js";
 
-const WRITES = ["upload", "print", "pause", "resume", "stop", "slice_hook"] as const;
+const WRITES = ["upload", "print", "pause", "resume", "stop"] as const;
 
 function tool(name: string, port = new MockPrinter(), safeMode?: boolean) {
   const found = createTools(port, safeMode === undefined ? undefined : { safeMode }).find(
@@ -41,7 +41,6 @@ describe("safe mode defaults on", () => {
       pause: { confirm: true },
       resume: { confirm: true },
       stop: { confirm: true },
-      slice_hook: { inputPath: "raw.stl", part: "clip", variant: "v1", rev: "r1", settings: "a;b" },
     };
 
     for (const name of WRITES) {
@@ -100,10 +99,23 @@ describe("confirm gate when safe mode is off", () => {
 });
 
 describe("set_light stays allowed in safe mode", () => {
-  it("registers set_light among the first 10 tools from createTools", () => {
-    const names = createTools(new MockPrinter()).map((entry) => entry.name);
-    expect(names.indexOf("set_light")).toBeLessThan(10);
-    expect(names.slice(0, 5)).toEqual(["status", "temps", "ams", "list_files", "set_light"]);
+  it("lists set_light in the first 10 under safe mode and omits slice_hook", () => {
+    const safeNames = createTools(new MockPrinter(), { safeMode: true }).map((entry) => entry.name);
+    expect(safeNames).toHaveLength(10);
+    expect(safeNames).toContain("set_light");
+    expect(safeNames.indexOf("set_light")).toBeLessThan(10);
+    expect(safeNames).not.toContain("slice_hook");
+    expect(safeNames.slice(0, 5)).toEqual(["status", "temps", "ams", "list_files", "set_light"]);
+    for (const name of ["print", "pause", "resume", "stop"] as const) {
+      expect(safeNames).toContain(name);
+    }
+
+    const openNames = createTools(new MockPrinter(), { safeMode: false }).map((entry) => entry.name);
+    expect(openNames).toContain("slice_hook");
+    expect(openNames).toContain("set_light");
+    for (const name of ["print", "pause", "resume", "stop"] as const) {
+      expect(openNames).toContain(name);
+    }
   });
 
   it("classifies chamber light as a low-risk write, not motion", () => {

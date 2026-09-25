@@ -41,9 +41,7 @@ export function writeTools(
     },
   }));
 
-  return [
-    // Grok Bot's MCP host keeps only the first 10 names from tools/list.
-    // Register set_light first among writes (right after the read tools) so it stays in that window.
+  const tools = [
     {
       name: "set_light",
       description:
@@ -103,47 +101,52 @@ export function writeTools(
       },
     },
     ...motion,
-    {
-      name: "slice_hook",
-      description: `Slice an STL or mesh 3MF to {part}-{variant}-{rev}.gcode.3mf. Does not upload or print. ${BLOCKED}`,
-      inputSchema: z.object({
-        inputPath: z.string().describe("Local .stl, .step, .obj, or mesh .3mf"),
-        part: z.string(),
-        variant: z.string(),
-        rev: z.string(),
-        outputDir: z.string().optional(),
-        settings: z.string().optional().describe("Semicolon-joined printer;process presets. Required for a bare STL."),
-        filaments: z.string().optional(),
-        plate: z.number().int().optional(),
-        arrange: z.boolean().optional(),
-        orient: z.boolean().optional(),
-      }),
-      handler: async (args: Record<string, unknown>) => {
-        guardWrite("slice_hook", safeMode, args.confirm);
-        const inputPath = String(args.inputPath);
-        if (!existsSync(inputPath)) throw new Error(`No such file: ${inputPath}`);
-        if (!isSliceableInput(inputPath)) {
-          throw new Error(`slice_hook accepts .stl, .step, .obj, or .3mf, got ${basename(inputPath)}`);
-        }
-        const filename = formatPrintableName(String(args.part), String(args.variant), String(args.rev));
-        const outputDir = typeof args.outputDir === "string" ? args.outputDir : ".";
-        const outputPath = join(outputDir, filename);
-        if (/\.stl$/i.test(inputPath) && !args.settings) {
-          throw new Error("Bare STL needs slicer presets in settings (printer JSON;process JSON).");
-        }
-        const result = await runSlice(slicerBin, {
-          inputPath,
-          outputPath,
-          plate: typeof args.plate === "number" ? args.plate : 0,
-          settings: typeof args.settings === "string" ? args.settings : undefined,
-          filaments: typeof args.filaments === "string" ? args.filaments : undefined,
-          arrange: args.arrange !== false,
-          orient: args.orient !== false,
-        });
-        return { output: result.output, cmd: result.cmd, artifact: filename, printJsonHint: sidecarPathFor(outputPath) };
-      },
-    },
   ];
+
+  // Host catalogs ~10 tools from tools/list; 11 registrations still hid set_light.
+  // slice_hook is already blocked in safe mode, so omit it then (exactly 10 tools).
+  if (safeMode) return tools;
+  tools.push({
+    name: "slice_hook",
+    description: `Slice an STL or mesh 3MF to {part}-{variant}-{rev}.gcode.3mf. Does not upload or print. ${BLOCKED}`,
+    inputSchema: z.object({
+      inputPath: z.string().describe("Local .stl, .step, .obj, or mesh .3mf"),
+      part: z.string(),
+      variant: z.string(),
+      rev: z.string(),
+      outputDir: z.string().optional(),
+      settings: z.string().optional().describe("Semicolon-joined printer;process presets. Required for a bare STL."),
+      filaments: z.string().optional(),
+      plate: z.number().int().optional(),
+      arrange: z.boolean().optional(),
+      orient: z.boolean().optional(),
+    }),
+    handler: async (args: Record<string, unknown>) => {
+      guardWrite("slice_hook", safeMode, args.confirm);
+      const inputPath = String(args.inputPath);
+      if (!existsSync(inputPath)) throw new Error(`No such file: ${inputPath}`);
+      if (!isSliceableInput(inputPath)) {
+        throw new Error(`slice_hook accepts .stl, .step, .obj, or .3mf, got ${basename(inputPath)}`);
+      }
+      const filename = formatPrintableName(String(args.part), String(args.variant), String(args.rev));
+      const outputDir = typeof args.outputDir === "string" ? args.outputDir : ".";
+      const outputPath = join(outputDir, filename);
+      if (/\.stl$/i.test(inputPath) && !args.settings) {
+        throw new Error("Bare STL needs slicer presets in settings (printer JSON;process JSON).");
+      }
+      const result = await runSlice(slicerBin, {
+        inputPath,
+        outputPath,
+        plate: typeof args.plate === "number" ? args.plate : 0,
+        settings: typeof args.settings === "string" ? args.settings : undefined,
+        filaments: typeof args.filaments === "string" ? args.filaments : undefined,
+        arrange: args.arrange !== false,
+        orient: args.orient !== false,
+      });
+      return { output: result.output, cmd: result.cmd, artifact: filename, printJsonHint: sidecarPathFor(outputPath) };
+    },
+  });
+  return tools;
 }
 
 function readSidecar(printablePath: string) {
