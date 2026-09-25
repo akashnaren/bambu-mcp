@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { config as loadDotenv } from "dotenv";
 import { BambuLanClient } from "./client.js";
 import { loadConfig } from "./config.js";
 import { MockPrinter } from "./mock.js";
 import { createMcpServer } from "./server.js";
 
 async function main(): Promise<void> {
+  loadDotenv();
   const cfg = loadConfig();
   const port = cfg.mock ? new MockPrinter() : new BambuLanClient(cfg);
   const server = createMcpServer(port, { safeMode: cfg.safeMode, slicerBin: cfg.slicerBin });

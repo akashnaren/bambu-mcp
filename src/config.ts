@@ -1,5 +1,3 @@
-import { config as loadDotenv } from "dotenv";
-
 export interface Config {
   ip: string;
   accessCode: string;
@@ -12,8 +10,6 @@ export interface Config {
   slicerBin?: string;
 }
 
-loadDotenv();
-
 function read(env: NodeJS.ProcessEnv, name: string, fallback?: string): string {
   const value = env[name] ?? fallback;
   if (value === undefined || value.trim() === "") {
@@ -25,7 +21,7 @@ function read(env: NodeJS.ProcessEnv, name: string, fallback?: string): string {
 }
 
 /** On unless the operator opts out. Only `0`, `false`, `off`, and `no` unlock writes. */
-export function parseSafeMode(raw: string | undefined): boolean {
+function parseSafeMode(raw: string | undefined): boolean {
   if (raw === undefined || raw.trim() === "") return true;
   const value = raw.trim().toLowerCase();
   if (value === "0" || value === "false" || value === "off" || value === "no") return false;

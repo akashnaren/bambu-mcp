@@ -1,10 +1,7 @@
 import { basename, dirname, sep } from "node:path";
 
-/** Optional sibling of `{part}-{variant}-{rev}.gcode.3mf`. */
+/** Optional sibling of `{part}-{variant}-{rev}.gcode.3mf`. Name comes from the file, not this object. */
 export interface PrintSidecar {
-  part?: string;
-  variant?: string;
-  rev?: string;
   plate?: number;
   useAms?: boolean;
   amsMapping?: number[];
@@ -29,13 +26,14 @@ export interface ArtifactName {
 }
 
 function parsePrintableName(filename: string): ArtifactName | null {
-  const match = PRINTABLE_NAME.exec(basename(filename));
+  const name = basename(filename);
+  const match = PRINTABLE_NAME.exec(name);
   if (!match?.groups) return null;
   return {
     part: match.groups.part,
     variant: match.groups.variant,
     rev: match.groups.rev,
-    filename: basename(filename),
+    filename: name,
   };
 }
 
@@ -43,7 +41,7 @@ export function formatPrintableName(part: string, variant: string, rev: string):
   const filename = `${part}-${variant}-${rev}.gcode.3mf`;
   if (!PRINTABLE_NAME.test(filename)) {
     throw new Error(
-      `Invalid Imagine name parts: part/variant/rev must be alphanumeric (underscores ok). Got ${filename}`,
+      `Invalid printable name ${filename}. part, variant, and rev must be letters, digits, or underscores, and must start with a letter or digit.`,
     );
   }
   return filename;
@@ -73,36 +71,32 @@ function isMeshOnly3mf(filePath: string): boolean {
   return /\.3mf$/i.test(filePath) && !/\.gcode\.3mf$/i.test(filePath);
 }
 
+const SLICED_NAME = "Run slice_hook to produce {part}-{variant}-{rev}.gcode.3mf.";
+
+function refuse(detail: string): never {
+  throw new Error(`Refuse start-print: ${detail}`);
+}
+
 export function isSliceableInput(filePath: string): boolean {
   return MESH_INPUT.test(filePath);
 }
 
 export function assertPrintableArtifact(filePath: string): ArtifactName {
   if (isScratchPath(filePath)) {
-    throw new Error(
-      `Refuse start-print: path is under scratch/ (${filePath}). Promote out of scratch first.`,
-    );
+    refuse(`path is under scratch/ (${filePath}). Promote out of scratch first.`);
   }
   if (isWipName(filePath)) {
-    throw new Error(
-      `Refuse start-print: wip-* artifacts are not printable (${basename(filePath)}).`,
-    );
+    refuse(`wip-* artifacts are not printable (${basename(filePath)}).`);
   }
   if (isBareStl(filePath)) {
-    throw new Error(
-      `Refuse start-print: bare STL is not printable. Run slice-hook to produce {part}-{variant}-{rev}.gcode.3mf.`,
-    );
+    refuse(`bare STL is not printable. ${SLICED_NAME}`);
   }
   if (isMeshOnly3mf(filePath)) {
-    throw new Error(
-      `Refuse start-print: mesh-only .3mf is not sliced. Run slice-hook to produce {part}-{variant}-{rev}.gcode.3mf.`,
-    );
+    refuse(`mesh-only .3mf is not sliced. ${SLICED_NAME}`);
   }
   const parsed = parsePrintableName(filePath);
   if (!parsed) {
-    throw new Error(
-      `Refuse start-print: expected {part}-{variant}-{rev}.gcode.3mf, got ${basename(filePath)}.`,
-    );
+    refuse(`expected {part}-{variant}-{rev}.gcode.3mf, got ${basename(filePath)}.`);
   }
   return parsed;
 }
@@ -114,11 +108,9 @@ export function parseSidecar(raw: unknown): PrintSidecar {
   const obj = raw as Record<string, unknown>;
   const sidecar: PrintSidecar = {};
 
-  for (const key of ["part", "variant", "rev", "bedType"] as const) {
-    if (obj[key] !== undefined) {
-      if (typeof obj[key] !== "string") throw new Error(`print.json.${key} must be a string`);
-      sidecar[key] = obj[key];
-    }
+  if (obj.bedType !== undefined) {
+    if (typeof obj.bedType !== "string") throw new Error("print.json.bedType must be a string");
+    sidecar.bedType = obj.bedType;
   }
   if (obj.plate !== undefined) {
     if (!Number.isInteger(obj.plate) || (obj.plate as number) < 1) {
