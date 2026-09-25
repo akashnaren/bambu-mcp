@@ -26,6 +26,8 @@ export interface PrintReport {
   [key: string]: unknown;
 }
 
+export type ChamberLight = "on" | "off" | "flashing";
+
 export interface StatusSnapshot {
   state: string;
   percent: number | null;
@@ -33,6 +35,8 @@ export interface StatusSnapshot {
   layer: number | null;
   totalLayers: number | null;
   subtask: string | null;
+  /** From `lights_report` when the cached report includes it. */
+  chamberLight: ChamberLight | null;
 }
 
 export interface TempsSnapshot {
@@ -87,6 +91,27 @@ export interface PrinterPort {
   pause(): Promise<void>;
   resume(): Promise<void>;
   stop(): Promise<void>;
+  /** Chamber light only. MQTT `system.ledctrl`. */
+  setLight(on: boolean): Promise<void>;
+}
+
+/**
+ * OpenBambuAPI `system.ledctrl`. Timing fields are only used for flashing,
+ * but the printer requires them on plain on/off as well.
+ */
+export function chamberLightPayload(on: boolean, sequenceId: string) {
+  return {
+    system: {
+      sequence_id: sequenceId,
+      command: "ledctrl" as const,
+      led_node: "chamber_light" as const,
+      led_mode: on ? ("on" as const) : ("off" as const),
+      led_on_time: 500,
+      led_off_time: 500,
+      loop_times: 1,
+      interval_time: 1000,
+    },
+  };
 }
 
 type Mqtt = PrinterController<any>;
@@ -94,6 +119,20 @@ type Mqtt = PrinterController<any>;
 function hex6(color: unknown): string | null {
   if (typeof color !== "string" || color.length < 6) return null;
   return `#${color.slice(0, 6).toUpperCase()}`;
+}
+
+/** Chamber light from a cached `print` report, or null when `lights_report` has no chamber node. */
+export function chamberLightFrom(report: PrintReport): ChamberLight | null {
+  const lights = report.lights_report;
+  if (!Array.isArray(lights)) return null;
+  for (const entry of lights) {
+    if (!entry || typeof entry !== "object") continue;
+    const row = entry as { node?: unknown; mode?: unknown };
+    if (row.node !== "chamber_light") continue;
+    if (row.mode === "on" || row.mode === "off" || row.mode === "flashing") return row.mode;
+    return null;
+  }
+  return null;
 }
 
 function statusFrom(report: PrintReport): StatusSnapshot {
@@ -104,6 +143,7 @@ function statusFrom(report: PrintReport): StatusSnapshot {
     layer: report.layer_num ?? null,
     totalLayers: report.total_layer_num ?? null,
     subtask: report.subtask_name ?? null,
+    chamberLight: chamberLightFrom(report),
   };
 }
 
@@ -292,6 +332,10 @@ export class BambuLanClient implements PrinterPort {
 
   async stop(): Promise<void> {
     await this.send({ print: { command: "stop", sequence_id: this.nextSeq() } });
+  }
+
+  async setLight(on: boolean): Promise<void> {
+    await this.send(chamberLightPayload(on, this.nextSeq()));
   }
 
   async startPrint(options: StartPrintOptions): Promise<void> {

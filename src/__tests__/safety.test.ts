@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { chamberLightFrom, chamberLightPayload } from "../client.js";
 import { loadConfig } from "../config.js";
+import { toolGate } from "../gates.js";
 import { MockPrinter } from "../mock.js";
 import { createTools } from "../tools.js";
 
@@ -94,5 +96,82 @@ describe("confirm gate when safe mode is off", () => {
       confirmed: true,
     });
     expect(port.commands).toEqual(["pause"]);
+  });
+});
+
+describe("set_light stays allowed in safe mode", () => {
+  it("classifies chamber light as a low-risk write, not motion", () => {
+    expect(toolGate("set_light")).toBe("safe_write_low_risk");
+    expect(toolGate("print")).toBe("motion");
+    expect(toolGate("pause")).toBe("motion");
+    expect(toolGate("resume")).toBe("motion");
+    expect(toolGate("stop")).toBe("motion");
+    expect(toolGate("upload")).toBe("write");
+    expect(toolGate("status")).toBe("read");
+  });
+
+  it("sends ledctrl timing fields for on and off", () => {
+    expect(chamberLightPayload(true, "7")).toEqual({
+      system: {
+        sequence_id: "7",
+        command: "ledctrl",
+        led_node: "chamber_light",
+        led_mode: "on",
+        led_on_time: 500,
+        led_off_time: 500,
+        loop_times: 1,
+        interval_time: 1000,
+      },
+    });
+    expect(chamberLightPayload(false, "8")).toMatchObject({
+      system: { command: "ledctrl", led_node: "chamber_light", led_mode: "off", led_on_time: 500 },
+    });
+  });
+
+  it("turns the chamber light on and off while safe mode is on, without confirm", async () => {
+    const port = new MockPrinter();
+    const setLight = tool("set_light", port);
+
+    await expect(setLight.handler({ on: true })).resolves.toMatchObject({
+      on: true,
+      led_node: "chamber_light",
+    });
+    await expect(setLight.handler({ on: false })).resolves.toMatchObject({
+      on: false,
+      led_node: "chamber_light",
+    });
+
+    expect(port.commands).toEqual(["ledctrl:on", "ledctrl:off"]);
+    expect(port.chamberLight).toBe("off");
+    expect(port.started).toHaveLength(0);
+    expect(port.state).toBe("IDLE");
+
+    await expect(tool("status", port).handler({})).resolves.toMatchObject({
+      chamberLight: "off",
+      safeMode: true,
+    });
+    await expect(
+      tool("print", port).handler({ file: "bracket-left-r1.gcode.3mf", confirm: true }),
+    ).rejects.toThrow(/BAMBU_SAFE_MODE/);
+    expect(port.started).toHaveLength(0);
+  });
+
+  it("reads chamber light from lights_report and ignores other nodes", () => {
+    expect(
+      chamberLightFrom({
+        lights_report: [
+          { mode: "on", node: "chamber_light" },
+          { mode: "flashing", node: "work_light" },
+        ],
+      }),
+    ).toBe("on");
+    expect(chamberLightFrom({})).toBe(null);
+  });
+
+  it("does not ask for confirm when safe mode is off", async () => {
+    const port = new MockPrinter();
+    await expect(tool("set_light", port, false).handler({ on: true })).resolves.toMatchObject({ on: true });
+    expect(port.commands).toEqual(["ledctrl:on"]);
+    expect(port.chamberLight).toBe("on");
   });
 });

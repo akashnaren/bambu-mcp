@@ -6,15 +6,17 @@ P2S hardware uses `BAMBU_MODEL=P1S` (P1S MQTT dialect). `P2S` in the env is acce
 
 ## Safe mode
 
-`BAMBU_SAFE_MODE` defaults to **on** when unset. Only `status`, `temps`, `ams`, and `list_files` run. `status` includes `safeMode: true`.
+`BAMBU_SAFE_MODE` defaults to **on** when unset. `status`, `temps`, `ams`, `list_files`, and `set_light` run. `status` includes `safeMode: true`. When the printer report already includes `lights_report`, `status` also includes `chamberLight` (`on`, `off`, `flashing`, or `null`).
 
-`upload`, `slice_hook`, `print`, `pause`, `resume`, and `stop` refuse until you set `BAMBU_SAFE_MODE=0` and reload the server. The error names that variable and says write tools still need `confirm: true` plus an explicit human ask. `confirm: true` does not bypass safe mode.
+`set_light` takes `{ on: true }` or `{ on: false }` and switches the chamber light. It works with safe mode on. It does not need `confirm`. It does not unlock `print`, `pause`, `resume`, or `stop`.
+
+`upload`, `slice_hook`, `print`, `pause`, `resume`, and `stop` refuse until you set `BAMBU_SAFE_MODE=0` and reload the server. The error names that variable and says those write tools still need `confirm: true` plus an explicit human ask. `confirm: true` does not bypass safe mode.
 
 Set `BAMBU_SAFE_MODE=0` yourself, in the shell or the MCP `env` block. An agent must not change it.
 
 After that, `print`, `pause`, `resume`, and `stop` still require `confirm: true`. Ask first. The server never sets `confirm`.
 
-Printer **Developer Mode** is a different lock. It lets the machine accept third-party writes. This server stays read-only until `BAMBU_SAFE_MODE=0`.
+Printer **Developer Mode** is a different lock. It lets the machine accept third-party writes. Uploads and motion stay locked until `BAMBU_SAFE_MODE=0`. The chamber light does not.
 
 ## Printer
 
@@ -35,7 +37,7 @@ Copy `.env.example` to `.env` (gitignored) or export the variables. Never put th
 | `BAMBU_ACCESS_CODE` | yes | LAN access code (also the MQTT/FTPS password) |
 | `BAMBU_SERIAL` | yes | Device serial |
 | `BAMBU_MODEL` | no | `P1S` for P2S hardware (default), or `H2D` |
-| `BAMBU_SAFE_MODE` | no | Unset or `1` = read-only. `0` unlocks writes. Motion still needs `confirm: true`. |
+| `BAMBU_SAFE_MODE` | no | Unset or `1` = reads and chamber light. `0` unlocks uploads and motion. Motion still needs `confirm: true`. |
 | `SLICER_BIN` | for slice | OrcaSlicer or Bambu Studio CLI |
 | `BAMBU_MOCK` | no | `1` = in-memory printer, no network |
 
@@ -45,7 +47,7 @@ npm test
 npm run build
 ```
 
-Cursor MCP (`~/.cursor/mcp.json`). `BAMBU_SAFE_MODE` is `1` so the server boots read-only. Change it to `"0"` only when you mean to unlock writes.
+Cursor MCP (`~/.cursor/mcp.json`). `BAMBU_SAFE_MODE` is `1` so uploads and motion stay locked. Chamber light still works. Change it to `"0"` only when you mean to unlock writes.
 
 ```json
 {
@@ -70,8 +72,11 @@ Cursor MCP (`~/.cursor/mcp.json`). `BAMBU_SAFE_MODE` is `1` so the server boots 
 | Tool | Safe mode on | Confirm |
 |---|---|---|
 | `status` `temps` `ams` `list_files` | allowed | no |
+| `set_light` | allowed | no |
 | `upload` `slice_hook` | refused | no |
 | `print` `pause` `resume` `stop` | refused | **yes**, after you agree |
+
+There is no raw gcode tool, no nozzle or bed temperature setter, and no control for more than one printer.
 
 `print` and `upload` accept only `{part}-{variant}-{rev}.gcode.3mf`. They refuse a bare `.stl`, a mesh-only `.3mf`, a `wip-*` name, and any `scratch/` path. A sibling `{part}-{variant}-{rev}.print.json` can set plate, AMS, and calibration. Tool arguments override it.
 
@@ -87,6 +92,6 @@ The skill will not start motion until safe mode is off and the operator agrees. 
 
 ## Code
 
-`config.ts` reads env. `client.ts` keeps one MQTT session and one FTPS login, and reuses the latest report for `status`, `temps`, and `ams`. `reads.ts` and `writes.ts` are the tools. `gates.ts` is safe mode, then confirm. `server.ts` registers them. `index.ts` starts stdio and does not connect until a tool asks.
+`config.ts` reads env. `client.ts` keeps one MQTT session and one FTPS login, and reuses the latest report for `status`, `temps`, and `ams`. `set_light` sends MQTT `system.ledctrl` for `chamber_light`, including `led_on_time`, `led_off_time`, `loop_times`, and `interval_time`. `reads.ts` and `writes.ts` are the tools. `gates.ts` classifies `set_light` as `safe_write_low_risk` (allowed in safe mode, no confirm). It is not in the write set that safe mode blocks, and not in the motion set (`print`, `pause`, `resume`, `stop`). `server.ts` registers them. `index.ts` starts stdio and does not connect until a tool asks.
 
 `npm test` uses `MockPrinter` and does not open the network.
