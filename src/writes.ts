@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { z } from "zod";
-import type { PrinterPort } from "./client.js";
+import type { LightNode, PrinterPort } from "./client.js";
+import type { Capabilities } from "./models.js";
 import {
   assertPrintableArtifact,
   defaultPrintOptions,
@@ -19,11 +20,17 @@ const BLOCKED =
 
 const confirmField = z.boolean().describe("Must be true. Ask the operator before setting this.");
 
+function lightNode(value: unknown): LightNode {
+  if (value === undefined) return "chamber_light";
+  if (value === "chamber_light" || value === "work_light") return value;
+  throw new Error('set_light node must be "chamber_light" or "work_light".');
+}
+
 export function writeTools(
   port: PrinterPort,
-  options: { safeMode: boolean; slicerBin?: string },
+  options: { safeMode: boolean; slicerBin?: string; capabilities: Capabilities },
 ) {
-  const { safeMode, slicerBin } = options;
+  const { safeMode, slicerBin, capabilities } = options;
   const motion = (
     [
       ["pause", "Pause the running print.", "paused", (p: PrinterPort) => p.pause()],
@@ -41,7 +48,88 @@ export function writeTools(
     },
   }));
 
-  return [
+  const lowRisk = [
+    {
+      name: "set_light",
+      description:
+        "Turn chamber_light or work_light on or off. Allowed while safe mode is on. Missing hardware returns supported:false. Does not move the printer and does not need confirm.",
+      inputSchema: z.object({
+        on: z.boolean().describe("true turns the light on. false turns it off."),
+        node: z
+          .enum(["chamber_light", "work_light"])
+          .optional()
+          .describe("Defaults to chamber_light. work_light returns supported:false when this printer has no work light."),
+      }),
+      handler: async (args: Record<string, unknown>) => {
+        guardWrite("set_light", safeMode, args.confirm);
+        if (typeof args.on !== "boolean") throw new Error("set_light needs { on: boolean }.");
+        const node = lightNode(args.node);
+        const present = node === "work_light" ? capabilities.workLight : capabilities.chamberLight;
+        if (!present) return { supported: false, on: args.on, led_node: node };
+        await port.setLight(args.on, node);
+        return { supported: true, on: args.on, led_node: node };
+      },
+    },
+    {
+      name: "set_camera",
+      description:
+        "Enable or disable camera recording and timelapse (MQTT camera.ipcam_record_set / camera.ipcam_timelapse). Settings only: no live stream and no snapshot. Allowed while safe mode is on. Missing camera returns supported:false.",
+      inputSchema: z.object({
+        record: z.boolean().optional().describe("true enables recording. false disables it."),
+        timelapse: z.boolean().optional().describe("true enables timelapse. false disables it."),
+      }),
+      handler: async (args: Record<string, unknown>) => {
+        guardWrite("set_camera", safeMode, args.confirm);
+        const record = args.record;
+        const timelapse = args.timelapse;
+        if (typeof record !== "boolean" && typeof timelapse !== "boolean") {
+          throw new Error("set_camera needs { record: boolean } and/or { timelapse: boolean }.");
+        }
+        const result: Record<string, unknown> = {};
+        let applied = false;
+        if (typeof record === "boolean") {
+          if (!capabilities.ipcamRecord) result.record = { supported: false };
+          else {
+            await port.setCamera({ record });
+            result.record = record ? "enable" : "disable";
+            applied = true;
+          }
+        }
+        if (typeof timelapse === "boolean") {
+          if (!capabilities.timelapse) result.timelapse = { supported: false };
+          else {
+            await port.setCamera({ timelapse });
+            result.timelapse = timelapse ? "enable" : "disable";
+            applied = true;
+          }
+        }
+        result.supported = applied;
+        return result;
+      },
+    },
+    {
+      name: "set_sound",
+      description:
+        "Turn printer sounds on or off via print.print_option sound_enable only. Allowed while safe mode is on. Does not change detection or print-halt options and does not need confirm.",
+      inputSchema: z.object({
+        on: z.boolean().describe("true enables sound. false disables it."),
+      }),
+      handler: async (args: Record<string, unknown>) => {
+        guardWrite("set_sound", safeMode, args.confirm);
+        if (typeof args.on !== "boolean") throw new Error("set_sound needs { on: boolean }.");
+        await port.setSound(args.on);
+        return { on: args.on, sound_enable: args.on };
+      },
+    },
+  ];
+
+  // Grok Bot's stdio host keeps about 10 tools from tools/list. These writes are
+  // already refused while safe mode is on, so leave them out of that catalog.
+  // createTools registers them again when safeMode is false.
+  if (safeMode) return lowRisk;
+
+  const tools = [
+    ...lowRisk,
     {
       name: "upload",
       description: `Upload a {part}-{variant}-{rev}.gcode.3mf over FTPS. Does not start a print. ${BLOCKED}`,
@@ -52,6 +140,7 @@ export function writeTools(
       handler: async (args: Record<string, unknown>) => {
         guardWrite("upload", safeMode, args.confirm);
         const localPath = String(args.localPath);
+        if (!capabilities.ftps) return { supported: false };
         if (!existsSync(localPath)) throw new Error(`No such file: ${localPath}`);
         const parsed = assertPrintableArtifact(localPath);
         const remote = args.remoteName ? String(args.remoteName) : parsed.filename;
@@ -127,21 +216,8 @@ export function writeTools(
         return { output: result.output, cmd: result.cmd, artifact: filename, printJsonHint: sidecarPathFor(outputPath) };
       },
     },
-    {
-      name: "set_light",
-      description:
-        "Turn the chamber light on or off. Allowed while safe mode is on. Does not move the printer and does not need confirm.",
-      inputSchema: z.object({
-        on: z.boolean().describe("true turns the chamber light on. false turns it off."),
-      }),
-      handler: async (args: Record<string, unknown>) => {
-        guardWrite("set_light", safeMode, args.confirm);
-        if (typeof args.on !== "boolean") throw new Error("set_light needs { on: boolean }.");
-        await port.setLight(args.on);
-        return { on: args.on, led_node: "chamber_light" };
-      },
-    },
   ];
+  return tools;
 }
 
 function readSidecar(printablePath: string) {

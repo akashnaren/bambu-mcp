@@ -8,10 +8,15 @@ import { createMcpServer } from "./server.js";
 async function main(): Promise<void> {
   const cfg = loadConfig();
   const port = cfg.mock ? new MockPrinter() : new BambuLanClient(cfg);
-  const server = createMcpServer(port, { safeMode: cfg.safeMode, slicerBin: cfg.slicerBin });
+  const server = createMcpServer(port, {
+    safeMode: cfg.safeMode,
+    slicerBin: cfg.slicerBin,
+    capabilities: cfg.capabilities,
+  });
   await server.connect(new StdioServerTransport());
+  // One printer per process. hardwareModel is what BAMBU_MODEL named; model is the bambu-js dialect.
   console.error(
-    `bambu-mcp ${cfg.mock ? "mock" : "lan"} model=${cfg.model} host=${cfg.ip} safeMode=${cfg.safeMode ? "on" : "off"}`,
+    `bambu-mcp ${cfg.mock ? "mock" : "lan"} hardware=${cfg.hardwareModel} dialect=${cfg.model} host=${cfg.ip} safeMode=${cfg.safeMode ? "on" : "off"}`,
   );
 }
 
