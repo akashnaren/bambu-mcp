@@ -1,5 +1,17 @@
 const WRITES = new Set(["upload", "print", "pause", "resume", "stop", "slice_hook"]);
 const MOTION = new Set(["print", "pause", "resume", "stop"]);
+/** Chamber light only. Allowed while safe mode is on. No confirm. Keep out of WRITES and MOTION. */
+const SAFE_WRITE_LOW_RISK = new Set(["set_light"]);
+
+export type ToolGate = "read" | "safe_write_low_risk" | "write" | "motion";
+
+/** Motion is checked first: those tools are also writes, and they need confirm. */
+export function toolGate(tool: string): ToolGate {
+  if (MOTION.has(tool)) return "motion";
+  if (WRITES.has(tool)) return "write";
+  if (SAFE_WRITE_LOW_RISK.has(tool)) return "safe_write_low_risk";
+  return "read";
+}
 
 export function assertSafeMode(tool: string, safeMode: boolean): void {
   if (!safeMode || !WRITES.has(tool)) return;

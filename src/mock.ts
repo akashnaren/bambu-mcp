@@ -6,6 +6,7 @@ export class MockPrinter implements PrinterPort {
   started: StartPrintOptions[] = [];
   commands: string[] = [];
   state = "IDLE";
+  chamberLight: "on" | "off" | "flashing" | null = null;
 
   async status() {
     return {
@@ -15,6 +16,7 @@ export class MockPrinter implements PrinterPort {
       layer: null,
       totalLayers: null,
       subtask: null,
+      chamberLight: this.chamberLight,
     };
   }
 
@@ -54,5 +56,10 @@ export class MockPrinter implements PrinterPort {
   async stop() {
     this.state = "IDLE";
     this.commands.push("stop");
+  }
+
+  async setLight(on: boolean) {
+    this.chamberLight = on ? "on" : "off";
+    this.commands.push(on ? "ledctrl:on" : "ledctrl:off");
   }
 }

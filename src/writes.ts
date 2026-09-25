@@ -127,6 +127,20 @@ export function writeTools(
         return { output: result.output, cmd: result.cmd, artifact: filename, printJsonHint: sidecarPathFor(outputPath) };
       },
     },
+    {
+      name: "set_light",
+      description:
+        "Turn the chamber light on or off. Allowed while safe mode is on. Does not move the printer and does not need confirm.",
+      inputSchema: z.object({
+        on: z.boolean().describe("true turns the chamber light on. false turns it off."),
+      }),
+      handler: async (args: Record<string, unknown>) => {
+        guardWrite("set_light", safeMode, args.confirm);
+        if (typeof args.on !== "boolean") throw new Error("set_light needs { on: boolean }.");
+        await port.setLight(args.on);
+        return { on: args.on, led_node: "chamber_light" };
+      },
+    },
   ];
 }
 
