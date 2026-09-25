@@ -100,6 +100,12 @@ describe("confirm gate when safe mode is off", () => {
 });
 
 describe("set_light stays allowed in safe mode", () => {
+  it("registers set_light among the first 10 tools from createTools", () => {
+    const names = createTools(new MockPrinter()).map((entry) => entry.name);
+    expect(names.indexOf("set_light")).toBeLessThan(10);
+    expect(names.slice(0, 5)).toEqual(["status", "temps", "ams", "list_files", "set_light"]);
+  });
+
   it("classifies chamber light as a low-risk write, not motion", () => {
     expect(toolGate("set_light")).toBe("safe_write_low_risk");
     expect(toolGate("print")).toBe("motion");
