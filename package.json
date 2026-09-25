@@ -1,7 +1,7 @@
 {
   "name": "bambu-mcp",
   "version": "0.1.0",
-  "description": "LAN MCP for a Bambu Lab P2S (P1S MQTT dialect) with the Imagine Engineer design→print contract",
+  "description": "LAN MCP for one Bambu Lab printer (P1/P2/X1/A1/H2 dialects) with the Imagine Engineer design→print contract",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

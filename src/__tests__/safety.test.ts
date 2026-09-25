@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { chamberLightFrom, chamberLightPayload } from "../client.js";
 import { loadConfig } from "../config.js";
-import { toolGate } from "../gates.js";
+import { guardWrite, toolGate } from "../gates.js";
 import { MockPrinter } from "../mock.js";
 import { createTools } from "../tools.js";
 
@@ -33,20 +33,13 @@ describe("safe mode defaults on", () => {
     });
   });
 
-  it("blocks every write even when confirm is true, and does not touch the printer", async () => {
+  it("omits gated writes from the safe-mode catalog and does not touch the printer", () => {
     const port = new MockPrinter();
-    const args: Record<string, Record<string, unknown>> = {
-      upload: { localPath: "clip-v1-r1.gcode.3mf" },
-      print: { file: "bracket-left-r1.gcode.3mf", confirm: true },
-      pause: { confirm: true },
-      resume: { confirm: true },
-      stop: { confirm: true },
-    };
+    const names = createTools(port, { safeMode: true }).map((entry) => entry.name);
 
-    for (const name of WRITES) {
-      await expect(tool(name, port).handler(args[name])).rejects.toThrow(
-        /BAMBU_SAFE_MODE=0.*confirm: true.*explicit human ask/,
-      );
+    for (const name of [...WRITES, "slice_hook"] as const) {
+      expect(names).not.toContain(name);
+      expect(() => guardWrite(name, true, true)).toThrow(/BAMBU_SAFE_MODE=0.*confirm: true.*explicit human ask/);
     }
 
     expect(port.started).toHaveLength(0);
@@ -99,21 +92,38 @@ describe("confirm gate when safe mode is off", () => {
 });
 
 describe("set_light stays allowed in safe mode", () => {
-  it("lists set_light in the first 10 under safe mode and omits slice_hook", () => {
+  it("keeps the safe-mode catalog at or under 10 and includes the demo tools", () => {
+    // The host catalogs ~10 names. Refused tools stay unregistered in safe mode
+    // so get_version, set_light, and set_camera are actually listed.
     const safeNames = createTools(new MockPrinter(), { safeMode: true }).map((entry) => entry.name);
-    expect(safeNames).toHaveLength(10);
-    expect(safeNames).toContain("set_light");
-    expect(safeNames.indexOf("set_light")).toBeLessThan(10);
-    expect(safeNames).not.toContain("slice_hook");
-    expect(safeNames.slice(0, 5)).toEqual(["status", "temps", "ams", "list_files", "set_light"]);
-    for (const name of ["print", "pause", "resume", "stop"] as const) {
-      expect(safeNames).toContain(name);
+    expect(safeNames.length).toBeLessThanOrEqual(10);
+    expect(safeNames).toEqual([
+      "status",
+      "temps",
+      "ams",
+      "list_files",
+      "get_version",
+      "set_light",
+      "set_camera",
+      "set_sound",
+    ]);
+    for (const name of ["slice_hook", "upload", "print", "pause", "resume", "stop"] as const) {
+      expect(safeNames).not.toContain(name);
     }
 
     const openNames = createTools(new MockPrinter(), { safeMode: false }).map((entry) => entry.name);
-    expect(openNames).toContain("slice_hook");
-    expect(openNames).toContain("set_light");
-    for (const name of ["print", "pause", "resume", "stop"] as const) {
+    for (const name of [
+      "get_version",
+      "set_light",
+      "set_camera",
+      "set_sound",
+      "upload",
+      "slice_hook",
+      "print",
+      "pause",
+      "resume",
+      "stop",
+    ] as const) {
       expect(openNames).toContain(name);
     }
   });
@@ -124,7 +134,10 @@ describe("set_light stays allowed in safe mode", () => {
     expect(toolGate("pause")).toBe("motion");
     expect(toolGate("resume")).toBe("motion");
     expect(toolGate("stop")).toBe("motion");
+    expect(toolGate("set_camera")).toBe("safe_write_low_risk");
+    expect(toolGate("set_sound")).toBe("safe_write_low_risk");
     expect(toolGate("upload")).toBe("write");
+    expect(toolGate("get_version")).toBe("read");
     expect(toolGate("status")).toBe("read");
   });
 
@@ -168,9 +181,8 @@ describe("set_light stays allowed in safe mode", () => {
       chamberLight: "off",
       safeMode: true,
     });
-    await expect(
-      tool("print", port).handler({ file: "bracket-left-r1.gcode.3mf", confirm: true }),
-    ).rejects.toThrow(/BAMBU_SAFE_MODE/);
+    expect(createTools(port, { safeMode: true }).some((entry) => entry.name === "print")).toBe(false);
+    expect(() => guardWrite("print", true, true)).toThrow(/BAMBU_SAFE_MODE/);
     expect(port.started).toHaveLength(0);
   });
 

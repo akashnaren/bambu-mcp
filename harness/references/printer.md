@@ -2,11 +2,33 @@
 
 Read this when the job depends on the machine, not for every chat.
 
+## One printer
+
+This process owns one printer. There is no fleet tool and no second IP. The P2S on this LAN stays at `BAMBU_IP=10.0.0.183`.
+
+## Models and dialects
+
+`BAMBU_MODEL` is the hardware name. bambu-js 3.0.1 can open only a `P1S` or `H2D` client, so the server maps onto those dialects and remembers the hardware name separately. Startup prints both. An unknown name fails and lists the accepted names.
+
+| `BAMBU_MODEL` | Dialect |
+|---|---|
+| `P1P`, `P1S`, `P2S` | `P1S` |
+| `X1`, `X1C`, `X1E` | `P1S` |
+| `A1` | `P1S` |
+| `A1MINI`, `A1_MINI`, `A1-MINI` | `P1S` |
+| `H2D`, `H2S` | `H2D` |
+
+Missing hardware returns `{ supported: false }` from the tool. It does not throw. Open-bed models (`A1`, `A1MINI`, `P1P`) have no chamber light and no chamber temperature sensor. `P1P` has no built-in camera. X1 and H2 can have a `work_light`. P2S does not.
+
 ## P2S speaks P1S
 
-Set `BAMBU_MODEL=P1S` for P2S hardware. The value `P2S` is accepted and stored as `P1S`. There is no separate P2S MQTT schema in bambu-js.
+`BAMBU_MODEL=P2S` is stored as hardware `P2S` and dialect `P1S`. There is no separate P2S MQTT schema in bambu-js. P2S has **no active chamber heater**. Chamber temperature rises from the bed and the hotend. This server has no chamber-temperature setter.
 
 LAN Only and Developer Mode are switches on the printer. They let a third-party client talk. They do not turn off `BAMBU_SAFE_MODE`. Official steps: [LAN Only](https://wiki.bambulab.com/en/knowledge-sharing/enable-lan-mode), [Developer Mode](https://wiki.bambulab.com/en/knowledge-sharing/enable-developer-mode).
+
+## Safe mode tools
+
+While `BAMBU_SAFE_MODE` is on, the catalog is `status`, `temps`, `ams`, `list_files`, `get_version`, `set_light`, `set_camera`, and `set_sound`. Upload, slice, and motion are registered again only after `BAMBU_SAFE_MODE=0` and a reload. `set_camera` changes recording and timelapse settings. It does not open a stream.
 
 ## Fit
 

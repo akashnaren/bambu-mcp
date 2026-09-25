@@ -26,7 +26,7 @@ ask size and material
 ## Ground rules
 
 1. **The operator starts motion.** `print`, `pause`, `resume`, and `stop` run only after they agree in this conversation, and only with `confirm: true`. Do not set `confirm` yourself. "Looks good" is not that yes. `BAMBU_SAFE_MODE=0` is not that yes.
-2. **Safe mode is on unless they turned it off.** Call `status` and read `safeMode`. While it is true, call only `status`, `temps`, `ams`, `list_files`, and `set_light`. `set_light` only switches the chamber light. If any other write says it is blocked by safe mode, stop. They set `BAMBU_SAFE_MODE=0` and reload the server. Do not change the variable. Do not retry the tool in a loop.
+2. **Safe mode is on unless they turned it off.** Call `status` and read `safeMode`. While it is true, the catalog lists `status`, `temps`, `ams`, `list_files`, `get_version`, `set_light`, `set_camera`, and `set_sound`. `set_light` switches `chamber_light` unless they name `work_light` and the printer has that node. `set_camera` only enables or disables recording and timelapse. `set_sound` only sets `sound_enable`. A result of `{ supported: false }` means that hardware is absent — stop, do not invent a call. Upload, slice, and motion are not in the catalog until they set `BAMBU_SAFE_MODE=0` and reload the server. Do not change the variable. Do not retry a blocked tool in a loop.
 3. **Know the size before slicing.** If they did not give millimeters, ask once: how big, what material, decorative or functional. A part that does not fit the plate does not get sliced.
 4. **Only a sliced, named plate is printable.** The name is `{part}-{variant}-{rev}.gcode.3mf` ([DESIGN.md](../DESIGN.md)). Refuse a bare `.stl`, a mesh-only `.3mf`, a `wip-*` name, and anything under `scratch/`. An STL goes through `slice_hook` first, never through `print`.
 5. **Show the file before `print`.** Tell them the artifact name, plate, and AMS slot. Wait. They review it in the slicer.
@@ -50,7 +50,7 @@ If the printer is already `RUNNING`, do not start another job.
 
 Call `status`, `temps`, and `ams` before any write.
 
-- `safeMode: true` means stop at reads and the chamber light. Do not upload, slice, or start motion.
+- `safeMode: true` means stop at reads, the light, camera settings, and sound. Do not upload, slice, or start motion.
 - Note nozzle, bed, and chamber. A cold nozzle is idle, not a license to heat it. This server has no temperature tool.
 - Match the requested material to an AMS slot from `ams`. If none matches, say so and wait. Do not guess a slot.
 
@@ -87,7 +87,7 @@ Poll `status` when they ask, or on a slow cadence they agreed to. Report state, 
 ```
 [ ] Size, material, and color or AMS slot known
 [ ] status, temps, and ams read; job is not already RUNNING
-[ ] safeMode understood; motion and file writes not attempted while it is true (`set_light` is allowed)
+[ ] safeMode understood; motion and file writes not attempted while it is true (`set_light`, `set_camera`, and `set_sound` are allowed)
 [ ] File is {part}-{variant}-{rev}.gcode.3mf, not stl, wip-*, or scratch/
 [ ] Operator saw the name and reviewed it
 [ ] Operator agreed in words, then print used confirm: true
@@ -102,15 +102,18 @@ Poll `status` when they ask, or on a slow cadence they agreed to. Report state, 
 | `temps` | allowed | no |
 | `ams` | allowed | no |
 | `list_files` | allowed | no |
+| `get_version` | allowed | no |
 | `set_light` | allowed | no |
-| `upload` | refused | no |
-| `slice_hook` | refused | no |
-| `print` | refused | yes |
-| `pause` | refused | yes |
-| `resume` | refused | yes |
-| `stop` | refused | yes |
+| `set_camera` | allowed | no |
+| `set_sound` | allowed | no |
+| `upload` | not registered | no |
+| `slice_hook` | not registered | no |
+| `print` | not registered | yes |
+| `pause` | not registered | yes |
+| `resume` | not registered | yes |
+| `stop` | not registered | yes |
 
-There is no raw gcode tool, no nozzle or bed temperature setter, and no fleet control. Chamber light is `set_light` with `{ on: true }` or `{ on: false }` only. Do not invent other calls.
+There is no raw gcode tool, no nozzle or bed temperature setter, no camera stream, and no fleet control. One MCP process is one printer. Chamber light is `set_light` with `{ on: true }` or `{ on: false }`. `set_camera` takes `record` and/or `timelapse`. `set_sound` takes `{ on: true }` or `{ on: false }`. Do not invent other calls.
 
 ## Mistakes
 

@@ -1,7 +1,10 @@
 const WRITES = new Set(["upload", "print", "pause", "resume", "stop", "slice_hook"]);
 const MOTION = new Set(["print", "pause", "resume", "stop"]);
-/** Chamber light only. Allowed while safe mode is on. No confirm. Keep out of WRITES and MOTION. */
-const SAFE_WRITE_LOW_RISK = new Set(["set_light"]);
+/**
+ * Light, camera record/timelapse, and sound. Allowed while safe mode is on.
+ * No confirm. Keep out of WRITES and MOTION so safe mode does not block them.
+ */
+const SAFE_WRITE_LOW_RISK = new Set(["set_light", "set_camera", "set_sound"]);
 
 export type ToolGate = "read" | "safe_write_low_risk" | "write" | "motion";
 

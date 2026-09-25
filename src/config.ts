@@ -1,11 +1,21 @@
 import { config as loadDotenv } from "dotenv";
+import {
+  capabilitiesFor,
+  normalizeModel,
+  type Capabilities,
+  type Dialect,
+  type HardwareModel,
+} from "./models.js";
 
 export interface Config {
   ip: string;
   accessCode: string;
   serial: string;
-  /** bambu-js dialect. P2S hardware uses `P1S`. */
-  model: "P1S" | "H2D";
+  /** What `BAMBU_MODEL` named, after alias normalization (`A1-MINI` → `A1MINI`). */
+  hardwareModel: HardwareModel;
+  /** bambu-js dialect. Only `P1S` or `H2D`. P2S hardware uses `P1S`. */
+  model: Dialect;
+  capabilities: Capabilities;
   mock: boolean;
   /** True unless the operator set `BAMBU_SAFE_MODE=0`. */
   safeMode: boolean;
@@ -32,24 +42,17 @@ export function parseSafeMode(raw: string | undefined): boolean {
   return true;
 }
 
-function normalizeModel(raw: string): Config["model"] {
-  const model = raw.toUpperCase();
-  if (model === "P2S") {
-    // P2S speaks the P1S-family MQTT dialect; bambu-js has no P2S schema.
-    return "P1S";
-  }
-  if (model === "P1S" || model === "H2D") return model;
-  throw new Error(`BAMBU_MODEL must be P1S, P2S, or H2D (got ${raw}). P2S hardware uses P1S.`);
-}
-
 /** Read printer settings from the environment. `BAMBU_MOCK=1` skips live secrets. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const mock = env.BAMBU_MOCK === "1" || env.BAMBU_MOCK === "true";
+  const { hardwareModel, dialect } = normalizeModel(env.BAMBU_MODEL ?? "P1S");
   return {
     ip: mock ? env.BAMBU_IP?.trim() || "127.0.0.1" : read(env, "BAMBU_IP"),
     accessCode: mock ? env.BAMBU_ACCESS_CODE?.trim() || "mock" : read(env, "BAMBU_ACCESS_CODE"),
     serial: mock ? env.BAMBU_SERIAL?.trim() || "MOCKSERIAL00000" : read(env, "BAMBU_SERIAL"),
-    model: normalizeModel(env.BAMBU_MODEL ?? "P1S"),
+    hardwareModel,
+    model: dialect,
+    capabilities: capabilitiesFor(hardwareModel),
     mock,
     safeMode: parseSafeMode(env.BAMBU_SAFE_MODE),
     slicerBin: env.SLICER_BIN?.trim() || undefined,
