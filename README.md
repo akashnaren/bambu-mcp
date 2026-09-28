@@ -86,6 +86,19 @@ Cursor MCP (`~/.cursor/mcp.json`). `BAMBU_SAFE_MODE` is `1` so uploads and motio
 }
 ```
 
+## Web UI
+
+`npm run ui` opens a page at `http://127.0.0.1:4173`. Buttons call the same tools as the MCP. The page reads printer settings from the environment or `.env`, then fills any missing value from `~/.cursor/mcp.json`. It does not change `BAMBU_SAFE_MODE`. While that is on, print, pause, resume, and stop stay disabled. Set `"BAMBU_SAFE_MODE": "0"` yourself and restart the page to unlock them. Motion still asks you to confirm on the page before it sends `confirm: true`.
+
+## macOS Local Network
+
+macOS must allow the app that started the server to reach devices on your home network. If every LAN address, including the router, answers "No route to host", this permission is missing.
+
+1. **System Settings → Privacy & Security → Local Network**.
+2. Turn on **Cursor**. If you ran `npm run ui` from the Terminal app, turn on **Terminal** instead.
+3. Quit that app fully with Cmd+Q and reopen it. A window reload is not enough.
+4. If the app is missing from the list, reopen it, try once, and click **Allow** on the macOS prompt.
+
 ## Tools
 
 | Tool | Safe mode on | Confirm |
@@ -111,6 +124,6 @@ The skill will not start motion until safe mode is off and the operator agrees. 
 
 ## Code
 
-`config.ts` reads env. `models.ts` maps `BAMBU_MODEL` to a bambu-js dialect and a capability table. `client.ts` keeps one MQTT session and one FTPS login, and reuses the latest report for `status`, `temps`, and `ams`. `get_version` sends MQTT `info.get_version` and returns module hw/sw. `set_light` sends MQTT `system.ledctrl` (`chamber_light` or `work_light`), including `led_on_time`, `led_off_time`, `loop_times`, and `interval_time`. `set_camera` sends `camera.ipcam_record_set` and `camera.ipcam_timelapse` with `control` `enable` or `disable`. `set_sound` sends `print.print_option` with `sound_enable` only. `reads.ts` and `writes.ts` are the tools. `gates.ts` classifies light, camera, and sound as `safe_write_low_risk` (allowed in safe mode, no confirm). They are not in the write set that safe mode blocks, and not in the motion set (`print`, `pause`, `resume`, `stop`). While safe mode is on, `createTools` omits the refused tools so the ~10-name host catalog can list the new ones. `server.ts` registers them. `index.ts` starts stdio and does not connect until a tool asks.
+`config.ts` reads env. `models.ts` maps `BAMBU_MODEL` to a bambu-js dialect and a capability table. `client.ts` keeps one MQTT session and one FTPS login, and reuses the latest report for `status`, `temps`, and `ams`. `get_version` sends MQTT `info.get_version` and returns module hw/sw. `set_light` sends MQTT `system.ledctrl` (`chamber_light` or `work_light`), including `led_on_time`, `led_off_time`, `loop_times`, and `interval_time`. `set_camera` sends `camera.ipcam_record_set` and `camera.ipcam_timelapse` with `control` `enable` or `disable`. `set_sound` sends `print.print_option` with `sound_enable` only. `reads.ts` and `writes.ts` are the tools. `gates.ts` classifies light, camera, and sound as `safe_write_low_risk` (allowed in safe mode, no confirm). They are not in the write set that safe mode blocks, and not in the motion set (`print`, `pause`, `resume`, `stop`). While safe mode is on, `createTools` omits the refused tools so the ~10-name host catalog can list the new ones. `server.ts` registers them. `index.ts` starts stdio and does not connect until a tool asks. `web.ts` serves the local page and calls the same tools.
 
 `npm test` uses `MockPrinter` and does not open the network.

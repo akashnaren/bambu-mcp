@@ -24,7 +24,7 @@ Missing hardware returns `{ supported: false }` from the tool. It does not throw
 
 `BAMBU_MODEL=P2S` is stored as hardware `P2S` and dialect `P1S`. There is no separate P2S MQTT schema in bambu-js. P2S has **no active chamber heater**. Chamber temperature rises from the bed and the hotend. This server has no chamber-temperature setter.
 
-LAN Only and Developer Mode are switches on the printer. They let a third-party client talk. They do not turn off `BAMBU_SAFE_MODE`. Official steps: [LAN Only](https://wiki.bambulab.com/en/knowledge-sharing/enable-lan-mode), [Developer Mode](https://wiki.bambulab.com/en/knowledge-sharing/enable-developer-mode).
+LAN Only and Developer Mode are switches on the printer. They let a third-party client talk. They do not turn off `BAMBU_SAFE_MODE`. Official steps: [LAN Only](https://wiki.bambulab.com/en/knowledge-sharing/enable-lan-mode), [Developer Mode](https://wiki.bambulab.com/en/knowledge-sharing/enable-developer-mode). "No route to host" on every LAN address, including the router, means macOS Local Network permission is missing for the app that started the process (Cursor, or Terminal if that is what ran `npm run ui`).
 
 ## Safe mode tools
 

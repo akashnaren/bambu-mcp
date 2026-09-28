@@ -226,6 +226,35 @@ export function modulesFrom(info: unknown): VersionModule[] {
 
 type Mqtt = PrinterController<any>;
 
+/** The raw mqtt.js socket bambu-js keeps private. Present at runtime after `connect()` starts. */
+export interface LateMqttSocket {
+  on(event: "error", listener: (error: Error) => void): unknown;
+  end(force: boolean): void;
+}
+
+/**
+ * bambu-js removes every mqtt.js listener when a connect fails, then mqtt.js
+ * can still emit `error` (`connack timeout`) and crash the process.
+ * Re-attach a no-op listener and force-close that socket.
+ */
+export function silenceLateMqttError(socket: LateMqttSocket | null | undefined): void {
+  if (!socket) return;
+  socket.on("error", () => undefined);
+  try {
+    socket.end(true);
+  } catch {
+    // Already closed by bambu-js cleanup.
+  }
+}
+
+function rawMqttSocket(client: object): LateMqttSocket | null {
+  const socket = (client as { mqttClient?: unknown }).mqttClient;
+  if (!socket || typeof socket !== "object") return null;
+  const candidate = socket as Partial<LateMqttSocket>;
+  if (typeof candidate.on !== "function" || typeof candidate.end !== "function") return null;
+  return candidate as LateMqttSocket;
+}
+
 function hex6(color: unknown): string | null {
   if (typeof color !== "string" || color.length < 6) return null;
   return `#${color.slice(0, 6).toUpperCase()}`;
@@ -398,9 +427,20 @@ export class BambuLanClient implements PrinterPort {
     const client = this.session();
     if (client.isConnected) return client;
     if (!this.opening) {
-      this.opening = client.connect().finally(() => {
-        this.opening = null;
-      });
+      const pending = client.connect();
+      // Captured now: bambu-js nulls `mqttClient` before the promise rejects.
+      const raw = rawMqttSocket(client);
+      this.opening = pending
+        .then(
+          () => undefined,
+          (error: unknown) => {
+            silenceLateMqttError(raw);
+            throw error;
+          },
+        )
+        .finally(() => {
+          this.opening = null;
+        });
     }
     await this.opening;
     return client;
