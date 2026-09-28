@@ -12,11 +12,13 @@
     "README.md",
     "AGENTS.md",
     "DESIGN.md",
-    "harness/**/*"
+    "harness/**/*",
+    "web/**/*"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
+    "ui": "tsc -p tsconfig.json && node dist/web.js",
     "dev": "node --import tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
