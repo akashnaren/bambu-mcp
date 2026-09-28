@@ -4,316 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Printer</title>
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg: #0d0f0c;
-      --surface: #161915;
-      --surface-2: #1d211c;
-      --surface-3: #252a24;
-      --line: #2a2f29;
-      --line-strong: #394038;
-      --text: #eef0ec;
-      --muted: #8f978c;
-      --faint: #5f675d;
-      --accent: #3fd07a;
-      --accent-ink: #062611;
-      --accent-soft: rgba(63, 208, 122, 0.12);
-      --warn: #f2b84b;
-      --warn-soft: rgba(242, 184, 75, 0.12);
-      --danger: #ff7a66;
-      --danger-soft: rgba(255, 122, 102, 0.12);
-      --info: #7cb8ff;
-      --info-soft: rgba(124, 184, 255, 0.12);
-      --radius: 16px;
-      --radius-sm: 10px;
-    }
-    * { box-sizing: border-box; }
-    [hidden] { display: none !important; }
-    html, body { margin: 0; }
-    body {
-      min-height: 100vh;
-      font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", sans-serif;
-      background:
-        radial-gradient(1200px 500px at 10% -10%, rgba(63, 208, 122, 0.07), transparent 60%),
-        var(--bg);
-      color: var(--text);
-      -webkit-font-smoothing: antialiased;
-    }
-    .wrap { width: min(1080px, calc(100% - 40px)); margin: 0 auto; padding: 28px 0 64px; }
-    code {
-      font: 13px/1.4 ui-monospace, "SF Mono", Menlo, monospace;
-      background: var(--surface-3);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 1px 6px;
-    }
-
-    /* Header */
-    .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-    .brand { display: flex; align-items: center; gap: 14px; }
-    .mark {
-      width: 42px; height: 42px; border-radius: 12px;
-      display: grid; place-items: center;
-      background: linear-gradient(145deg, #2a3a2c, #151a14);
-      border: 1px solid var(--line-strong);
-    }
-    .mark svg { width: 22px; height: 22px; color: var(--accent); }
-    .brand h1 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
-    .brand p { margin: 0; color: var(--muted); font-size: 13px; }
-    .pills { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .pill {
-      display: inline-flex; align-items: center; gap: 7px;
-      height: 30px; padding: 0 12px; border-radius: 999px;
-      font-size: 13px; font-weight: 550;
-      background: var(--surface); border: 1px solid var(--line); color: var(--muted);
-    }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
-    .pill.online { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
-    .pill.online .dot { background: var(--accent); box-shadow: 0 0 0 4px rgba(63, 208, 122, 0.18); }
-    .pill.offline { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
-    .pill.offline .dot { background: var(--danger); }
-    .pill.safe { color: var(--info); background: var(--info-soft); border-color: transparent; }
-    .pill.unsafe { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
-    .pill svg { width: 14px; height: 14px; }
-
-    /* Layout */
-    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
-    .span-12 { grid-column: span 12; }
-    .span-7 { grid-column: span 7; }
-    .span-5 { grid-column: span 5; }
-    .span-6 { grid-column: span 6; }
-    @media (max-width: 760px) { .span-7, .span-5, .span-6 { grid-column: span 12; } }
-
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 20px;
-    }
-    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-    .card-head h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-    .card-head .aside { font-size: 12px; color: var(--faint); }
-
-    /* Hero */
-    .hero { display: flex; align-items: center; gap: 28px; padding: 24px; }
-    .ring { position: relative; width: 132px; height: 132px; flex: none; }
-    .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-    .ring .track { stroke: var(--surface-3); }
-    .ring .bar { stroke: var(--accent); transition: stroke-dashoffset 600ms ease, stroke 300ms; }
-    .ring .label { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
-    .ring .pct { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
-    .ring .pct small { font-size: 15px; color: var(--muted); font-weight: 600; }
-    .hero-body { min-width: 0; flex: 1; }
-    .state {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-size: 13px; font-weight: 650; padding: 4px 10px; border-radius: 999px;
-      background: var(--surface-3); color: var(--muted);
-    }
-    .state .dot { background: currentColor; }
-    .state.good { background: var(--accent-soft); color: var(--accent); }
-    .state.warn { background: var(--warn-soft); color: var(--warn); }
-    .state.bad { background: var(--danger-soft); color: var(--danger); }
-    .state.info { background: var(--info-soft); color: var(--info); }
-    .job { margin: 10px 0 12px; font-size: 24px; font-weight: 650; letter-spacing: -0.015em; line-height: 1.25; overflow-wrap: anywhere; }
-    .job.empty { color: var(--faint); font-weight: 550; }
-    .facts { display: flex; flex-wrap: wrap; gap: 8px 24px; color: var(--muted); font-size: 14px; }
-    .facts b { color: var(--text); font-weight: 600; }
-    .fault { margin-top: 12px; color: var(--danger); font-size: 14px; }
-
-    /* Temperatures, inside the hero */
-    .temps { display: flex; gap: 28px; flex: none; padding-left: 28px; border-left: 1px solid var(--line); }
-    .temp { min-width: 84px; }
-    .temp .name { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-    .temp .name svg { width: 14px; height: 14px; color: var(--faint); }
-    .temp .value { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; margin-top: 4px; line-height: 1.15; }
-    .temp .value small { font-size: 16px; color: var(--muted); font-weight: 600; }
-    .temp .target { font-size: 12px; color: var(--faint); }
-    .temp.heating .value { color: var(--warn); }
-    @media (max-width: 900px) {
-      .hero { flex-wrap: wrap; }
-      .temps { width: 100%; padding: 18px 0 0; border-left: 0; border-top: 1px solid var(--line); justify-content: space-between; }
-    }
-    @media (max-width: 560px) { .hero { flex-direction: column; align-items: flex-start; } }
-
-    /* Controls */
-    .controls { display: flex; flex-direction: column; }
-    .control { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
-    .control:first-child { border-top: 0; padding-top: 0; }
-    .control:last-child { padding-bottom: 0; }
-    .icon {
-      width: 36px; height: 36px; flex: none; border-radius: 10px;
-      display: grid; place-items: center;
-      background: var(--surface-2); border: 1px solid var(--line); color: var(--muted);
-      transition: color 200ms, background 200ms;
-    }
-    .icon svg { width: 18px; height: 18px; }
-    .control.on .icon { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
-    .control .text { flex: 1; min-width: 0; }
-    .control .title { font-weight: 600; }
-    .control .sub { font-size: 13px; color: var(--muted); }
-
-    .switch {
-      position: relative; width: 50px; height: 30px; flex: none;
-      border-radius: 999px; border: 1px solid var(--line-strong);
-      background: var(--surface-3); cursor: pointer; padding: 0;
-      transition: background 200ms, border-color 200ms;
-    }
-    .switch::after {
-      content: ""; position: absolute; top: 3px; left: 3px;
-      width: 22px; height: 22px; border-radius: 50%;
-      background: #d9ddd6; box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-      transition: transform 200ms ease, background 200ms;
-    }
-    .switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
-    .switch[aria-checked="true"]::after { transform: translateX(20px); background: #fff; }
-    .switch:disabled { opacity: 0.5; cursor: progress; }
-    .switch:focus-visible, .btn:focus-visible, .seg button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
-
-    .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
-    .seg button {
-      font: inherit; font-size: 13px; font-weight: 600;
-      border: 0; background: transparent; color: var(--muted);
-      padding: 5px 14px; border-radius: 999px; cursor: pointer;
-    }
-    .seg button[aria-pressed="true"] { background: var(--surface-3); color: var(--text); }
-    .seg button:disabled { cursor: progress; opacity: 0.6; }
-
-    /* AMS */
-    .spools { display: flex; flex-direction: column; gap: 8px; }
-    .spool {
-      position: relative;
-      background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm);
-      padding: 12px 14px; display: flex; align-items: center; gap: 14px;
-    }
-    .spool .text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-    .spool.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-    .reel {
-      width: 36px; height: 36px; border-radius: 50%; flex: none;
-      border: 2px solid #5a6258;
-      box-shadow: 0 0 0 3px var(--surface-2), 0 0 0 4px var(--line-strong), inset 0 0 0 7px rgba(0,0,0,0.25);
-    }
-    .reel.empty { background: transparent; border: 1.5px dashed var(--line-strong); box-shadow: none; }
-    .spool .hex { font: 11px/1.3 ui-monospace, "SF Mono", Menlo, monospace; color: var(--faint); }
-    .spool .type { font-weight: 650; }
-    .spool .slot { font-size: 12px; color: var(--muted); }
-    .badge {
-      flex: none;
-      font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
-      padding: 2px 7px; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
-    }
-
-    /* Files */
-    .files { list-style: none; margin: 0; padding: 0; }
-    .files li { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
-    .files li:first-child { border-top: 0; padding-top: 0; }
-    .files .fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
-    .files svg { width: 16px; height: 16px; color: var(--faint); flex: none; }
-    .empty-note { color: var(--faint); font-size: 14px; padding: 18px 0; text-align: center; }
-
-    /* Buttons and forms */
-    .btn {
-      font: inherit; font-size: 14px; font-weight: 600;
-      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      height: 38px; padding: 0 16px; border-radius: 10px; cursor: pointer;
-      background: var(--surface-3); color: var(--text); border: 1px solid var(--line-strong);
-      transition: background 150ms, border-color 150ms, opacity 150ms;
-    }
-    .btn:hover:not(:disabled) { border-color: var(--faint); }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-    .btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
-    .btn.danger { color: var(--danger); }
-    .btn.sm { height: 32px; padding: 0 12px; font-size: 13px; }
-    .btn svg { width: 16px; height: 16px; }
-    .field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
-    .field input, .field select {
-      font: inherit; font-size: 14px; color: var(--text);
-      height: 38px; padding: 0 12px; border-radius: 10px;
-      background: var(--surface-2); border: 1px solid var(--line-strong);
-    }
-    .field input:focus, .field select:focus { outline: none; border-color: var(--info); }
-    .form { display: grid; grid-template-columns: 1fr 90px; gap: 12px; }
-    .form .full { grid-column: 1 / -1; }
-    .motion { display: flex; gap: 8px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
-    .motion .btn { flex: 1; }
-
-    .lock {
-      display: flex; gap: 14px; align-items: flex-start;
-      background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 16px;
-    }
-    .lock .icon { color: var(--info); background: var(--info-soft); border-color: transparent; }
-    .lock h3 { margin: 0 0 4px; font-size: 15px; }
-    .lock p { margin: 0; color: var(--muted); font-size: 14px; }
-    .lock p + p { margin-top: 8px; }
-
-    /* Network help */
-    .alert {
-      display: none; gap: 14px; align-items: flex-start;
-      background: var(--danger-soft); border: 1px solid rgba(255, 122, 102, 0.35);
-      border-radius: var(--radius); padding: 18px 20px; margin-bottom: 16px;
-    }
-    .alert.show { display: flex; }
-    .alert .icon { color: var(--danger); background: rgba(255, 122, 102, 0.15); border-color: transparent; }
-    .alert h3 { margin: 0 0 6px; font-size: 15px; }
-    .steps { margin: 0; padding-left: 20px; color: var(--muted); font-size: 14px; }
-    .steps li { margin: 3px 0; }
-    .steps b { color: var(--text); font-weight: 600; }
-
-    details.help { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 0 20px; }
-    details.help summary {
-      cursor: pointer; list-style: none; padding: 16px 0;
-      display: flex; align-items: center; justify-content: space-between;
-      font-weight: 600; color: var(--muted);
-    }
-    details.help summary::-webkit-details-marker { display: none; }
-    details.help summary::after { content: "+"; font-size: 20px; color: var(--faint); }
-    details.help[open] summary::after { content: "–"; }
-    details.help .body { padding: 0 0 18px; }
-    details.help p { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
-
-    /* Toast and dialog */
-    .toast {
-      position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px);
-      background: var(--surface-3); border: 1px solid var(--line-strong); color: var(--text);
-      padding: 10px 16px; border-radius: 12px; font-size: 14px; font-weight: 550;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.45);
-      opacity: 0; pointer-events: none; transition: opacity 200ms, transform 200ms;
-      max-width: min(560px, calc(100% - 32px));
-    }
-    .toast.show { opacity: 1; transform: translate(-50%, 0); }
-    .toast.bad { border-color: rgba(255, 122, 102, 0.5); color: var(--danger); }
-
-    dialog {
-      background: var(--surface); color: var(--text);
-      border: 1px solid var(--line-strong); border-radius: 18px;
-      padding: 24px; width: min(440px, calc(100% - 32px));
-      box-shadow: 0 30px 80px rgba(0,0,0,0.6);
-    }
-    dialog::backdrop { background: rgba(5, 6, 5, 0.7); backdrop-filter: blur(3px); }
-    dialog h3 { margin: 0 0 6px; font-size: 18px; }
-    dialog p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
-    dialog dl { margin: 0 0 20px; display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 14px; }
-    dialog dt { color: var(--muted); }
-    dialog dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
-    dialog .actions { display: flex; gap: 8px; justify-content: flex-end; }
-
-    .skeleton { color: transparent !important; background: var(--surface-3); border-radius: 6px; }
-  </style>
 </head>
-<body>
-  <div class="wrap">
-    <header class="top">
-      <div class="brand">
+<body class="min-h-screen font-sans text-[15px] leading-normal text-ink antialiased">
+  <div class="mx-auto w-[min(1080px,calc(100%-40px))] pt-7 pb-16">
+    <header class="mb-5 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3.5">
         <div class="mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="9" rx="2"/><path d="M7 18v3h10v-3"/><path d="M8 13h.01"/></svg>
         </div>
         <div>
-          <h1 id="model">Printer</h1>
-          <p id="host">Connecting…</p>
+          <h1 id="model" class="text-xl font-semibold tracking-tight">Printer</h1>
+          <p id="host" class="text-[13px] text-muted">Connecting…</p>
         </div>
       </div>
-      <div class="pills">
+      <div class="flex flex-wrap items-center gap-2">
         <span class="pill" id="conn"><span class="dot"></span><span id="connText">Connecting</span></span>
         <span class="pill" id="safe">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>
@@ -341,64 +45,94 @@
       </div>
     </section>
 
-    <main class="grid">
-      <section class="card hero span-12" aria-label="Print status">
-        <div class="ring">
-          <svg viewBox="0 0 120 120" aria-hidden="true">
-            <circle class="track" cx="60" cy="60" r="52" fill="none" stroke-width="10" />
-            <circle class="bar" id="ringBar" cx="60" cy="60" r="52" fill="none" stroke-width="10" stroke-linecap="round"
-              stroke-dasharray="326.73" stroke-dashoffset="326.73" />
+    <main class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <section class="card flex flex-col items-start gap-7 lg:col-span-2 min-[900px]:flex-row min-[900px]:items-center" aria-label="Print status">
+        <div class="relative h-[132px] w-[132px] shrink-0">
+          <svg class="h-full w-full -rotate-90" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="stroke-surface-3" cx="60" cy="60" r="52" fill="none" stroke-width="10" />
+            <circle class="ring-bar" id="ringBar" cx="60" cy="60" r="52" fill="none" stroke-width="10" stroke-linecap="round" />
           </svg>
-          <div class="label"><div class="pct" id="pct">–</div></div>
+          <div class="absolute inset-0 grid place-items-center text-center">
+            <div class="text-[30px] font-bold tracking-tight" id="pct">–</div>
+          </div>
         </div>
-        <div class="hero-body">
+        <div class="min-w-0 flex-1">
           <span class="state" id="state"><span class="dot"></span><span id="stateText">Connecting</span></span>
-          <div class="job empty" id="job">Waiting for the printer…</div>
-          <div class="facts" id="facts"></div>
-          <div class="fault" id="fault" hidden></div>
+          <div class="job my-2.5 text-2xl font-semibold tracking-tight break-words is-empty" id="job">Waiting for the printer…</div>
+          <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted" id="facts"></div>
+          <div class="mt-3 text-sm text-danger" id="fault" hidden></div>
         </div>
-        <div class="temps" aria-label="Temperatures">
-          <div class="temp" id="tNozzle">
-            <div class="name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8v6l-2 3v3h-4v-3L8 9z"/><path d="M12 15v6"/></svg>Nozzle</div>
-            <div class="value">–</div><div class="target">&nbsp;</div>
+        <div class="flex w-full justify-between gap-7 border-t border-line pt-4 min-[900px]:w-auto min-[900px]:shrink-0 min-[900px]:border-t-0 min-[900px]:border-l min-[900px]:pt-0 min-[900px]:pl-7" aria-label="Temperatures">
+          <div class="temp min-w-[84px]" id="tNozzle">
+            <div class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
+              <svg class="h-3.5 w-3.5 text-faint" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8v6l-2 3v3h-4v-3L8 9z"/><path d="M12 15v6"/></svg>
+              Nozzle
+            </div>
+            <div class="temp-value mt-1 text-[30px] leading-tight font-bold tracking-tight">–</div>
+            <div class="temp-target text-xs text-faint">&nbsp;</div>
           </div>
-          <div class="temp" id="tBed">
-            <div class="name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="14" width="18" height="4" rx="1"/><path d="M8 10c0-2 2-2 2-4M12 10c0-2 2-2 2-4M16 10c0-2 2-2 2-4"/></svg>Bed</div>
-            <div class="value">–</div><div class="target">&nbsp;</div>
+          <div class="temp min-w-[84px]" id="tBed">
+            <div class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
+              <svg class="h-3.5 w-3.5 text-faint" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="14" width="18" height="4" rx="1"/><path d="M8 10c0-2 2-2 2-4M12 10c0-2 2-2 2-4M16 10c0-2 2-2 2-4"/></svg>
+              Bed
+            </div>
+            <div class="temp-value mt-1 text-[30px] leading-tight font-bold tracking-tight">–</div>
+            <div class="temp-target text-xs text-faint">&nbsp;</div>
           </div>
-          <div class="temp" id="tChamber">
-            <div class="name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16"/></svg>Chamber</div>
-            <div class="value">–</div><div class="target">&nbsp;</div>
+          <div class="temp min-w-[84px]" id="tChamber">
+            <div class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
+              <svg class="h-3.5 w-3.5 text-faint" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16"/></svg>
+              Chamber
+            </div>
+            <div class="temp-value mt-1 text-[30px] leading-tight font-bold tracking-tight">–</div>
+            <div class="temp-target text-xs text-faint">&nbsp;</div>
           </div>
         </div>
       </section>
 
-      <section class="card span-6">
-        <div class="card-head"><h2>Controls</h2></div>
-        <div class="controls">
+      <section class="card">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <h2 class="text-[13px] font-semibold tracking-[0.06em] text-muted uppercase">Controls</h2>
+        </div>
+        <div>
           <div class="control" id="rowChamber">
             <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"/></svg></div>
-            <div class="text"><div class="title">Chamber light</div><div class="sub" id="subChamber">–</div></div>
-            <button class="switch" id="swChamber" role="switch" aria-checked="false" aria-label="Chamber light"></button>
+            <div class="min-w-0 flex-1">
+              <div class="font-semibold">Chamber light</div>
+              <div class="text-[13px] text-muted" id="subChamber">–</div>
+            </div>
+            <button class="switch" id="swChamber" type="button" role="switch" aria-checked="false" aria-label="Chamber light"></button>
           </div>
           <div class="control" id="rowWork" hidden>
             <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></div>
-            <div class="text"><div class="title">Work light</div><div class="sub" id="subWork">–</div></div>
-            <button class="switch" id="swWork" role="switch" aria-checked="false" aria-label="Work light"></button>
+            <div class="min-w-0 flex-1">
+              <div class="font-semibold">Work light</div>
+              <div class="text-[13px] text-muted" id="subWork">–</div>
+            </div>
+            <button class="switch" id="swWork" type="button" role="switch" aria-checked="false" aria-label="Work light"></button>
           </div>
           <div class="control" id="rowRecord">
             <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></svg></div>
-            <div class="text"><div class="title">Camera recording</div><div class="sub" id="subRecord">–</div></div>
-            <button class="switch" id="swRecord" role="switch" aria-checked="false" aria-label="Camera recording"></button>
+            <div class="min-w-0 flex-1">
+              <div class="font-semibold">Camera recording</div>
+              <div class="text-[13px] text-muted" id="subRecord">–</div>
+            </div>
+            <button class="switch" id="swRecord" type="button" role="switch" aria-checked="false" aria-label="Camera recording"></button>
           </div>
           <div class="control" id="rowLapse">
             <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/></svg></div>
-            <div class="text"><div class="title">Timelapse</div><div class="sub" id="subLapse">–</div></div>
-            <button class="switch" id="swLapse" role="switch" aria-checked="false" aria-label="Timelapse"></button>
+            <div class="min-w-0 flex-1">
+              <div class="font-semibold">Timelapse</div>
+              <div class="text-[13px] text-muted" id="subLapse">–</div>
+            </div>
+            <button class="switch" id="swLapse" type="button" role="switch" aria-checked="false" aria-label="Timelapse"></button>
           </div>
           <div class="control" id="rowSound">
             <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg></div>
-            <div class="text"><div class="title">Sound</div><div class="sub">The printer does not report this</div></div>
+            <div class="min-w-0 flex-1">
+              <div class="font-semibold">Sound</div>
+              <div class="text-[13px] text-muted">The printer does not report this</div>
+            </div>
             <div class="seg" role="group" aria-label="Sound">
               <button type="button" id="soundOn" aria-pressed="false">On</button>
               <button type="button" id="soundOff" aria-pressed="false">Off</button>
@@ -407,18 +141,26 @@
         </div>
       </section>
 
-      <section class="card span-6">
-        <div class="card-head"><h2>Filament</h2><span class="aside" id="amsAside"></span></div>
-        <div class="spools" id="spools"><div class="empty-note">Loading…</div></div>
+      <section class="card">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <h2 class="text-[13px] font-semibold tracking-[0.06em] text-muted uppercase">Filament</h2>
+          <span class="text-xs text-faint" id="amsAside"></span>
+        </div>
+        <div class="flex flex-col gap-2" id="spools"><div class="empty-note">Loading…</div></div>
       </section>
 
-      <section class="card span-6">
-        <div class="card-head"><h2>Files on the printer</h2><button class="btn sm" id="reloadFiles" type="button">Refresh</button></div>
+      <section class="card">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <h2 class="text-[13px] font-semibold tracking-[0.06em] text-muted uppercase">Files on the printer</h2>
+          <button class="btn btn-sm" id="reloadFiles" type="button">Refresh</button>
+        </div>
         <ul class="files" id="files"><li class="empty-note">Loading…</li></ul>
       </section>
 
-      <section class="card span-6">
-        <div class="card-head"><h2>Print</h2></div>
+      <section class="card">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <h2 class="text-[13px] font-semibold tracking-[0.06em] text-muted uppercase">Print</h2>
+        </div>
         <div class="lock" id="printLock" hidden>
           <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
           <div>
@@ -427,28 +169,28 @@
             <p>To unlock, set <code>"BAMBU_SAFE_MODE": "0"</code> in <code>~/.cursor/mcp.json</code> yourself, then restart this page with <code>npm run ui</code>.</p>
           </div>
         </div>
-        <div id="printForm" hidden>
-          <div class="form">
-            <label class="field full">File on this Mac (.gcode.3mf)
-              <input id="localFile" type="text" placeholder="/Users/you/Downloads/hose_clamp-left-r3.gcode.3mf" autocomplete="off" />
-            </label>
-            <label class="field">Filament
-              <select id="amsSlot"></select>
-            </label>
-            <label class="field">Plate
-              <input id="plate" type="number" min="1" value="1" />
-            </label>
-            <div class="full"><button class="btn primary" id="printLocal" type="button" style="width:100%">Print this file</button></div>
+        <div id="printForm" class="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-3" hidden>
+          <label class="field col-span-2">File on this Mac (.gcode.3mf)
+            <input id="localFile" type="text" placeholder="/Users/you/Downloads/hose_clamp-left-r3.gcode.3mf" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="field">Filament
+            <select id="amsSlot"></select>
+          </label>
+          <label class="field">Plate
+            <input id="plate" type="number" min="1" value="1" />
+          </label>
+          <div class="col-span-2">
+            <button class="btn is-primary w-full" id="printLocal" type="button">Print this file</button>
           </div>
-          <div class="motion">
-            <button class="btn" id="pauseBtn" type="button">Pause</button>
-            <button class="btn" id="resumeBtn" type="button">Resume</button>
-            <button class="btn danger" id="stopBtn" type="button">Stop</button>
+          <div class="col-span-2 mt-1.5 flex gap-2 border-t border-line pt-4">
+            <button class="btn flex-1" id="pauseBtn" type="button">Pause</button>
+            <button class="btn flex-1" id="resumeBtn" type="button">Resume</button>
+            <button class="btn is-danger flex-1" id="stopBtn" type="button">Stop</button>
           </div>
         </div>
       </section>
 
-      <details class="help span-12">
+      <details class="help lg:col-span-2">
         <summary>Can't reach the printer?</summary>
         <div class="body">
           <p>macOS must allow the app that started this page to reach devices on your home network.</p>
@@ -458,7 +200,7 @@
             <li>Quit that app fully with <b>Cmd+Q</b> and reopen it. A window reload is not enough.</li>
             <li>If the app is missing from the list, reopen it, try once, and click <b>Allow</b> on the macOS prompt.</li>
           </ol>
-          <p style="margin-top:12px">Also check that the printer is on, on the same Wi-Fi, and has <b>LAN Only</b> turned on in its settings.</p>
+          <p class="mt-3">Also check that the printer is on, on the same Wi-Fi, and has <b>LAN Only</b> turned on in its settings.</p>
         </div>
       </details>
     </main>
@@ -470,464 +212,16 @@
     <h3 id="askTitle"></h3>
     <p id="askText"></p>
     <dl id="askFacts"></dl>
-    <div class="actions">
+    <div class="flex justify-end gap-2">
       <button class="btn" id="askNo" type="button">Cancel</button>
-      <button class="btn primary" id="askYes" type="button">Confirm</button>
+      <button class="btn is-primary" id="askYes" type="button">Confirm</button>
     </div>
   </dialog>
 
-  <script>
-    const $ = (id) => document.getElementById(id);
-    const RING = 326.73;
-    const STATES = {
-      RUNNING: ["Printing", "good"],
-      PREPARE: ["Preparing", "warn"],
-      SLICING: ["Slicing", "warn"],
-      PAUSE: ["Paused", "warn"],
-      FINISH: ["Finished", "info"],
-      FAILED: ["Failed", "bad"],
-      IDLE: ["Idle", ""],
-    };
+  <template id="fileIcon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>
+  </template>
 
-    let info = { safeMode: true, tools: [], capabilities: {} };
-    let status = null;
-    let ams = null;
-    let polling = false;
-    const pending = {};
-
-    // ---------- helpers ----------
-    let toastTimer;
-    function toast(message, bad) {
-      const el = $("toast");
-      el.textContent = message;
-      el.className = "toast show" + (bad ? " bad" : "");
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => { el.className = "toast" + (bad ? " bad" : ""); }, 3200);
-    }
-
-    function has(tool) { return info.tools.includes(tool); }
-
-    async function call(name, args) {
-      const res = await fetch("/api/tool/" + name, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(args || {}),
-      });
-      const body = await res.json().catch(() => ({ ok: false, error: "Bad response from the page server" }));
-      if (body.hint === "localNetwork") $("netAlert").classList.add("show");
-      if (!res.ok || body.ok === false) throw new Error(body.error || "HTTP " + res.status);
-      $("netAlert").classList.remove("show");
-      return body.result;
-    }
-
-    function jobName(raw) {
-      if (!raw) return "";
-      return raw.replace(/\.gcode(\.3mf)?$/i, "").replace(/_/g, " ").replace(/\s+-+\s+/g, " – ").replace(/\s+/g, " ").trim();
-    }
-
-    function duration(min) {
-      if (min == null) return null;
-      if (min <= 0) return "done";
-      const h = Math.floor(min / 60);
-      const m = min % 60;
-      return (h ? h + " h " : "") + (m || !h ? m + " min" : "").trim();
-    }
-
-    function setConn(online, text) {
-      $("conn").className = "pill " + (online ? "online" : "offline");
-      $("connText").textContent = text;
-    }
-
-    function setSwitch(id, on, sub, subText) {
-      const sw = $(id);
-      sw.setAttribute("aria-checked", on ? "true" : "false");
-      sw.closest(".control").classList.toggle("on", !!on);
-      if (sub) $(sub).textContent = subText;
-    }
-
-    // The printer's report can lag a few seconds behind a command. Keep the
-    // clicked state until the report agrees, so the switch does not bounce back.
-    function reportSwitch(id, on, sub, subText) {
-      const want = pending[id];
-      if (want && Date.now() < want.until && on !== want.on) return;
-      delete pending[id];
-      setSwitch(id, on, sub, subText);
-    }
-
-    // ---------- render ----------
-    function renderStatus(s) {
-      const [label, tone] = STATES[s.state] || [s.state ? s.state.charAt(0) + s.state.slice(1).toLowerCase() : "Unknown", ""];
-      $("state").className = "state " + tone;
-      $("stateText").textContent = label;
-
-      const name = jobName(s.subtask);
-      $("job").textContent = name || "No job on the printer";
-      $("job").className = "job" + (name ? "" : " empty");
-
-      const pct = typeof s.percent === "number" ? Math.max(0, Math.min(100, s.percent)) : null;
-      $("pct").innerHTML = pct == null ? "–" : pct + "<small>%</small>";
-      $("ringBar").style.strokeDashoffset = String(RING * (1 - (pct || 0) / 100));
-      $("ringBar").style.stroke = tone === "bad" ? "var(--danger)" : tone === "warn" ? "var(--warn)" : tone === "info" ? "var(--info)" : "var(--accent)";
-
-      const facts = $("facts");
-      facts.replaceChildren();
-      const add = (k, v) => {
-        if (v == null || v === "") return;
-        const span = document.createElement("span");
-        span.append(document.createTextNode(k + " "));
-        const b = document.createElement("b");
-        b.textContent = v;
-        span.append(b);
-        facts.append(span);
-      };
-      if (s.layer != null) add("Layer", s.totalLayers ? s.layer + " of " + s.totalLayers : String(s.layer));
-      if (s.state === "RUNNING" || s.state === "PAUSE" || s.state === "PREPARE") add("Time left", duration(s.remainingMin));
-
-      const fault = s.printError && s.printError !== 0;
-      $("fault").hidden = !fault;
-      if (fault) $("fault").textContent = "The printer reported an error (code " + (s.errorCode || s.printError) + "). Check the printer screen.";
-
-      if (s.wifiSignal) {
-        $("wifi").hidden = false;
-        $("wifiText").textContent = "Wi-Fi " + s.wifiSignal.replace("dBm", " dBm");
-      }
-
-      const chamber = s.chamberLight;
-      reportSwitch("swChamber", chamber === "on", "subChamber", chamber ? (chamber === "on" ? "On" : chamber === "off" ? "Off" : "Flashing") : "Unknown");
-      const work = (s.lights || []).find((l) => l.node === "work_light");
-      if (info.capabilities.workLight && work) reportSwitch("swWork", work.mode === "on", "subWork", work.mode === "on" ? "On" : work.mode === "off" ? "Off" : "Flashing");
-      const rec = s.ipcam && s.ipcam.record;
-      const lapse = s.ipcam && s.ipcam.timelapse;
-      reportSwitch("swRecord", rec === "enable", "subRecord", rec ? (rec === "enable" ? "Recording is on" : "Recording is off") : "Unknown");
-      reportSwitch("swLapse", lapse === "enable", "subLapse", lapse ? (lapse === "enable" ? "Timelapse is on" : "Timelapse is off") : "Unknown");
-      updateMotion();
-    }
-
-    function renderTemp(id, now, target) {
-      const tile = $(id);
-      const value = tile.querySelector(".value");
-      const tgt = tile.querySelector(".target");
-      if (now == null) {
-        value.textContent = "–";
-        tgt.textContent = "Not reported";
-        tile.classList.remove("heating");
-        return;
-      }
-      value.innerHTML = Math.round(now) + "<small>°C</small>";
-      if (target == null) tgt.textContent = "\u00a0";
-      else if (target <= 0) tgt.textContent = "Heater off";
-      else tgt.textContent = "Target " + Math.round(target) + "°C";
-      tile.classList.toggle("heating", target > 0 && Math.abs(target - now) > 3);
-    }
-
-    function renderTemps(t) {
-      renderTemp("tNozzle", t.nozzleC, t.nozzleTargetC);
-      renderTemp("tBed", t.bedC, t.bedTargetC);
-      renderTemp("tChamber", t.chamberC, null);
-    }
-
-    function renderAms(a) {
-      ams = a;
-      const box = $("spools");
-      box.replaceChildren();
-      const units = a.units || [];
-      if (a.supported === false || !units.length) {
-        const note = document.createElement("div");
-        note.className = "empty-note";
-        note.textContent = a.supported === false ? "This printer has no AMS." : "No AMS detected.";
-        box.append(note);
-        $("amsAside").textContent = "";
-      }
-      for (const unit of units) {
-        for (const slot of unit.slots || []) {
-          const tile = document.createElement("div");
-          tile.className = "spool" + (slot.active ? " active" : "");
-          const reel = document.createElement("div");
-          reel.className = "reel" + (slot.type ? "" : " empty");
-          if (slot.type && slot.colorHex) reel.style.background = slot.colorHex;
-          const text = document.createElement("div");
-          text.className = "text";
-          const type = document.createElement("div");
-          type.className = "type";
-          type.textContent = slot.type || "Empty";
-          const where = document.createElement("div");
-          where.className = "slot";
-          where.textContent = (units.length > 1 ? "AMS " + (unit.id + 1) + " · " : "") + "Slot " + (slot.slot + 1);          text.append(type, where);
-          if (slot.type && slot.colorHex) {
-            const hex = document.createElement("div");
-            hex.className = "hex";
-            hex.textContent = slot.colorHex;
-            text.append(hex);
-          }
-          tile.append(reel, text);
-          if (slot.active) {
-            const badge = document.createElement("span");
-            badge.className = "badge";
-            badge.textContent = "In use";
-            tile.append(badge);
-          }
-          box.append(tile);
-        }
-      }
-      if (units.length) {
-        const count = units.reduce((n, u) => n + (u.slots || []).filter((s) => s.type).length, 0);
-        $("amsAside").textContent = count + " loaded";
-      }
-      fillSlotPicker();
-    }
-
-    function fillSlotPicker() {
-      const select = $("amsSlot");
-      const current = select.value;
-      select.replaceChildren();
-      for (const unit of (ams && ams.units) || []) {
-        for (const slot of unit.slots || []) {
-          if (!slot.type) continue;
-          const opt = document.createElement("option");
-          opt.value = String(slot.slot);
-          opt.textContent = "Slot " + (slot.slot + 1) + " · " + slot.type;
-          select.append(opt);
-        }
-      }
-      const ext = document.createElement("option");
-      ext.value = "external";
-      ext.textContent = "External spool";
-      select.append(ext);
-      if ([...select.options].some((o) => o.value === current)) select.value = current;
-    }
-
-    function renderFiles(list) {
-      const ul = $("files");
-      ul.replaceChildren();
-      if (!list.length) {
-        const li = document.createElement("li");
-        li.className = "empty-note";
-        li.textContent = "No files stored on the printer.";
-        ul.append(li);
-        return;
-      }
-      for (const name of list) {
-        const li = document.createElement("li");
-        li.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>');
-        const span = document.createElement("span");
-        span.className = "fname";
-        span.textContent = name;
-        span.title = name;
-        li.append(span);
-        if (has("print") && /\.gcode\.3mf$/i.test(name)) {
-          const btn = document.createElement("button");
-          btn.className = "btn sm";
-          btn.type = "button";
-          btn.textContent = "Print";
-          btn.onclick = () => startPrint(name, true);
-          li.append(btn);
-        }
-        ul.append(li);
-      }
-    }
-
-    function updateMotion() {
-      if (!has("pause")) return;
-      const st = status && status.state;
-      const busy = st === "RUNNING" || st === "PREPARE";
-      $("pauseBtn").disabled = !busy;
-      $("resumeBtn").disabled = st !== "PAUSE";
-      $("stopBtn").disabled = !(busy || st === "PAUSE");
-      $("printLocal").disabled = busy || st === "PAUSE";
-    }
-
-    // ---------- polling ----------
-    async function poll() {
-      if (polling) return;
-      polling = true;
-      try {
-        const [s, t, a] = await Promise.allSettled([call("status"), call("temps"), call("ams")]);
-        if (s.status === "fulfilled") {
-          status = s.value;
-          renderStatus(status);
-          setConn(true, "Online");
-        } else {
-          setConn(false, "Offline");
-          $("state").className = "state bad";
-          $("stateText").textContent = "Offline";
-          $("job").textContent = "Can't reach the printer";
-          $("job").className = "job empty";
-          $("facts").textContent = s.reason.message;
-        }
-        if (t.status === "fulfilled") renderTemps(t.value);
-        if (a.status === "fulfilled") renderAms(a.value);
-      } finally {
-        polling = false;
-      }
-    }
-
-    async function loadFiles() {
-      try {
-        const result = await call("list_files");
-        renderFiles(result.files || []);
-      } catch (error) {
-        const ul = $("files");
-        ul.replaceChildren();
-        const li = document.createElement("li");
-        li.className = "empty-note";
-        li.textContent = "Couldn't list files: " + error.message;
-        ul.append(li);
-      }
-    }
-
-    // ---------- actions ----------
-    async function flip(id, run, labelOn, labelOff) {
-      const sw = $(id);
-      const next = sw.getAttribute("aria-checked") !== "true";
-      const sub = "sub" + id.slice(2);
-      const before = $(sub).textContent;
-      sw.disabled = true;
-      setSwitch(id, next, sub, next ? "Turning on…" : "Turning off…");
-      pending[id] = { on: next, until: Date.now() + 12000 };
-      try {
-        const result = await run(next);
-        if (result && result.supported === false) {
-          delete pending[id];
-          setSwitch(id, !next, sub, before);
-          toast("This printer doesn't support that.", true);
-        } else {
-          toast(next ? labelOn : labelOff);
-        }
-      } catch (error) {
-        delete pending[id];
-        setSwitch(id, !next, sub, before);
-        toast(error.message, true);
-      } finally {
-        sw.disabled = false;
-        setTimeout(poll, 2500);
-        setTimeout(poll, 7000);
-      }
-    }
-
-    $("swChamber").onclick = () => flip("swChamber", (on) => call("set_light", { on, node: "chamber_light" }), "Chamber light on", "Chamber light off");
-    $("swWork").onclick = () => flip("swWork", (on) => call("set_light", { on, node: "work_light" }), "Work light on", "Work light off");
-    $("swRecord").onclick = () => flip("swRecord", async (on) => {
-      const r = await call("set_camera", { record: on });
-      return r.record && r.record.supported === false ? { supported: false } : r;
-    }, "Recording on", "Recording off");
-    $("swLapse").onclick = () => flip("swLapse", async (on) => {
-      const r = await call("set_camera", { timelapse: on });
-      return r.timelapse && r.timelapse.supported === false ? { supported: false } : r;
-    }, "Timelapse on", "Timelapse off");
-
-    async function setSound(on) {
-      for (const b of [$("soundOn"), $("soundOff")]) b.disabled = true;
-      try {
-        await call("set_sound", { on });
-        $("soundOn").setAttribute("aria-pressed", on ? "true" : "false");
-        $("soundOff").setAttribute("aria-pressed", on ? "false" : "true");
-        $("rowSound").classList.toggle("on", on);
-        toast(on ? "Sound on" : "Sound off");
-      } catch (error) {
-        toast(error.message, true);
-      } finally {
-        for (const b of [$("soundOn"), $("soundOff")]) b.disabled = false;
-      }
-    }
-    $("soundOn").onclick = () => setSound(true);
-    $("soundOff").onclick = () => setSound(false);
-    $("reloadFiles").onclick = loadFiles;
-
-    let resolveAsk = null;
-    function confirmAction(title, text, facts, yesLabel, danger) {
-      $("askTitle").textContent = title;
-      $("askText").textContent = text;
-      const dl = $("askFacts");
-      dl.replaceChildren();
-      for (const [k, v] of facts) {
-        const dt = document.createElement("dt");
-        dt.textContent = k;
-        const dd = document.createElement("dd");
-        dd.textContent = v;
-        dl.append(dt, dd);
-      }
-      dl.hidden = !facts.length;
-      $("askYes").textContent = yesLabel;
-      $("askYes").className = "btn " + (danger ? "danger" : "primary");
-      $("ask").showModal();
-      return new Promise((resolve) => { resolveAsk = resolve; });
-    }
-    $("askYes").onclick = () => { $("ask").close(); resolveAsk && resolveAsk(true); resolveAsk = null; };
-    $("askNo").onclick = () => { $("ask").close(); resolveAsk && resolveAsk(false); resolveAsk = null; };
-    $("ask").addEventListener("cancel", () => { resolveAsk && resolveAsk(false); resolveAsk = null; });
-
-    async function startPrint(file, alreadyUploaded) {
-      const slot = $("amsSlot").value;
-      const useAms = slot !== "external";
-      const plate = Number($("plate").value || 1);
-      const filament = $("amsSlot").selectedOptions[0] ? $("amsSlot").selectedOptions[0].textContent : "External spool";
-      const yes = await confirmAction(
-        "Start this print?",
-        "The printer will heat up and start moving.",
-        [["File", file.split("/").pop()], ["Plate", String(plate)], ["Filament", filament]],
-        "Start print",
-        false,
-      );
-      if (!yes) return;
-      const args = { file, confirm: true, plate, useAms };
-      if (useAms) args.amsMapping = [Number(slot)];
-      if (alreadyUploaded) args.alreadyUploaded = true;
-      try {
-        await call("print", args);
-        toast("Print sent");
-        setTimeout(poll, 2500);
-      } catch (error) {
-        toast(error.message, true);
-      }
-    }
-
-    async function motion(tool, title, text, yesLabel, danger) {
-      const job = status && status.subtask ? jobName(status.subtask) : "the current job";
-      const yes = await confirmAction(title, text, [["Job", job]], yesLabel, danger);
-      if (!yes) return;
-      try {
-        await call(tool, { confirm: true });
-        toast(yesLabel + " sent");
-        setTimeout(poll, 2500);
-      } catch (error) {
-        toast(error.message, true);
-      }
-    }
-
-    $("printLocal").onclick = () => {
-      const file = $("localFile").value.trim();
-      if (!file) { toast("Enter the path to a .gcode.3mf file first.", true); $("localFile").focus(); return; }
-      startPrint(file, false);
-    };
-    $("pauseBtn").onclick = () => motion("pause", "Pause the print?", "The print head parks until you resume.", "Pause", false);
-    $("resumeBtn").onclick = () => motion("resume", "Resume the print?", "The printer continues where it stopped.", "Resume", false);
-    $("stopBtn").onclick = () => motion("stop", "Stop the print?", "This cancels the job. It cannot be resumed.", "Stop print", true);
-
-    // ---------- boot ----------
-    async function boot() {
-      try {
-        info = await (await fetch("/api/info")).json();
-      } catch {
-        setConn(false, "Page server stopped");
-        return;
-      }
-      document.title = info.hardwareModel + " · Printer";
-      $("model").textContent = "Bambu Lab " + info.hardwareModel;
-      $("host").textContent = info.host;
-      $("safe").className = "pill " + (info.safeMode ? "safe" : "unsafe");
-      $("safeText").textContent = info.safeMode ? "Safe mode on" : "Safe mode off";
-      $("rowWork").hidden = !info.capabilities.workLight;
-      $("rowChamber").hidden = info.capabilities.chamberLight === false;
-      const unlocked = has("print");
-      $("printLock").hidden = unlocked;
-      $("printForm").hidden = !unlocked;
-      fillSlotPicker();
-      await poll();
-      loadFiles();
-      setInterval(poll, 5000);
-      setInterval(loadFiles, 60000);
-    }
-    boot();
-  </script>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

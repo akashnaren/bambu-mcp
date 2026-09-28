@@ -17,12 +17,13 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:web": "vite build",
     "start": "node dist/index.js",
-    "ui": "tsc -p tsconfig.json && node dist/web.js",
+    "ui": "npm run build:web && npm run build && node dist/web.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
     "dev": "node --import tsx src/index.ts",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "test:watch": "vitest"
   },
   "engines": {
     "node": ">=20"
@@ -50,9 +51,13 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^22.18.0",
+    "sass": "^1.105.0",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
+    "vite": "^7.3.6",
     "vitest": "^3.2.4"
   }
 }

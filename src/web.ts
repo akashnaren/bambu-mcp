@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, extname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { BambuLanClient, type PrinterPort } from "./client.js";
 import { loadConfig, type Config } from "./config.js";
@@ -50,6 +51,29 @@ export function fillMissingPrinterEnv(env: NodeJS.ProcessEnv, mcpText: string | 
   return next;
 }
 
+/** One printer report for the page poll: status, temps, and ams share a single request. */
+export async function readLive(tools: Tool[]): Promise<{
+  status: unknown;
+  temps: unknown;
+  ams: unknown;
+  statusError: string | null;
+  hint: "localNetwork" | null;
+}> {
+  const [status, temps, ams] = await Promise.all([
+    runTool(tools, "status", {}),
+    runTool(tools, "temps", {}),
+    runTool(tools, "ams", {}),
+  ]);
+  const statusError = status.body.ok === false ? String(status.body.error ?? "Status failed") : null;
+  return {
+    status: status.body.ok ? (status.body.result ?? null) : null,
+    temps: temps.body.ok ? (temps.body.result ?? null) : null,
+    ams: ams.body.ok ? (ams.body.result ?? null) : null,
+    statusError,
+    hint: statusError && status.body.hint === "localNetwork" ? "localNetwork" : null,
+  };
+}
+
 export async function runTool(
   tools: Tool[],
   name: string,
@@ -69,8 +93,44 @@ export async function runTool(
   }
 }
 
-function pagePath(): string {
-  return join(dirname(fileURLToPath(import.meta.url)), "../web/index.html");
+const STATIC_TYPES: Record<string, string> = {
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".woff2": "font/woff2",
+};
+
+export function webRoot(): string {
+  return join(dirname(fileURLToPath(import.meta.url)), "../web/dist");
+}
+
+/** Hashed build files under `web/dist/assets` only. Rejects paths that leave that directory. */
+export function resolveStaticFile(root: string, pathname: string): string | null {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  if (!decoded.startsWith("/assets/") || decoded.includes("\0") || decoded.includes("\\")) return null;
+  if (!existsSync(root)) return null;
+  const rootReal = realpathSync(root);
+  const candidate = normalize(join(rootReal, decoded.slice(1)));
+  const rel = relative(rootReal, candidate);
+  if (!rel.startsWith(`assets${sep}`) || rel.startsWith("..") || isAbsolute(rel)) return null;
+  if (!existsSync(candidate)) return null;
+  let real: string;
+  try {
+    real = realpathSync(candidate);
+  } catch {
+    return null;
+  }
+  const relReal = relative(rootReal, real);
+  if (!relReal.startsWith(`assets${sep}`) || relReal.startsWith("..") || isAbsolute(relReal)) return null;
+  if (!statSync(real).isFile()) return null;
+  if (!STATIC_TYPES[extname(real).toLowerCase()]) return null;
+  return real;
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -96,12 +156,40 @@ export function createWebHandler(options: {
   tools: Tool[];
   info: { safeMode: boolean; hardwareModel: string; host: string; capabilities: Capabilities };
   page: () => string;
+  staticRoot?: string;
 }) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? "/", `http://${HOST}`);
+    if (req.method === "GET" && options.staticRoot && url.pathname.startsWith("/assets/")) {
+      const file = resolveStaticFile(options.staticRoot, url.pathname);
+      const type = file ? STATIC_TYPES[extname(file).toLowerCase()] : undefined;
+      if (!file || !type) {
+        sendJson(res, 404, { ok: false, error: "Not found" });
+        return;
+      }
+      const bytes = await readFile(file);
+      res.writeHead(200, {
+        "content-type": type,
+        "content-length": bytes.byteLength,
+        "cache-control": "public, max-age=31536000, immutable",
+        "x-content-type-options": "nosniff",
+      });
+      res.end(bytes);
+      return;
+    }
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-      res.end(options.page());
+      const html = options.page();
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "content-length": Buffer.byteLength(html),
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+      });
+      res.end(html);
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/live") {
+      sendJson(res, 200, await readLive(options.tools));
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/info") {
@@ -164,8 +252,8 @@ export function startWeb(): void {
     slicerBin: cfg.slicerBin,
     capabilities: cfg.capabilities,
   });
-  const file = pagePath();
-  const page = () => readFileSync(file, "utf8");
+  const root = webRoot();
+  const page = () => readFileSync(join(root, "index.html"), "utf8");
   page();
   const handler = createWebHandler({
     tools,
@@ -176,6 +264,7 @@ export function startWeb(): void {
       capabilities: cfg.capabilities,
     },
     page,
+    staticRoot: root,
   });
   const server = createServer((req, res) => {
     void handler(req, res).catch((error: unknown) => {

@@ -88,7 +88,7 @@ Cursor MCP (`~/.cursor/mcp.json`). `BAMBU_SAFE_MODE` is `1` so uploads and motio
 
 ## Web UI
 
-`npm run ui` opens a page at `http://127.0.0.1:4173`. Buttons call the same tools as the MCP. The page reads printer settings from the environment or `.env`, then fills any missing value from `~/.cursor/mcp.json`. It does not change `BAMBU_SAFE_MODE`. While that is on, print, pause, resume, and stop stay disabled. Set `"BAMBU_SAFE_MODE": "0"` yourself and restart the page to unlock them. Motion still asks you to confirm on the page before it sends `confirm: true`.
+`npm run ui` builds the page from `web/src` (TypeScript, SCSS, and Tailwind) and opens it at `http://127.0.0.1:4173`. Buttons call the same tools as the MCP. The page reads printer settings from the environment or `.env`, then fills any missing value from `~/.cursor/mcp.json`. It does not change `BAMBU_SAFE_MODE`. While that is on, print, pause, resume, and stop stay disabled. Set `"BAMBU_SAFE_MODE": "0"` yourself and restart the page to unlock them. Motion still asks you to confirm on the page before it sends `confirm: true`.
 
 ## macOS Local Network
 
