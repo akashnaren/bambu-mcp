@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { chamberLightFrom, chamberLightPayload } from "../client.js";
 import { loadConfig } from "../config.js";
-import { guardWrite, toolGate } from "../gates.js";
 import { MockPrinter } from "../mock.js";
-import { createTools } from "../tools.js";
+import { createTools, guardWrite, toolGate } from "../tools/index.js";
 
 const WRITES = ["upload", "print", "pause", "resume", "stop"] as const;
 

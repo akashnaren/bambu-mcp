@@ -9,7 +9,7 @@ import { BambuLanClient, type PrinterPort } from "./client.js";
 import { loadConfig, type Config } from "./config.js";
 import { MockPrinter } from "./mock.js";
 import type { Capabilities } from "./models.js";
-import { createTools, type Tool } from "./tools.js";
+import { createTools, type Tool } from "./tools/index.js";
 
 const HOST = "127.0.0.1";
 const PORT = 4173;

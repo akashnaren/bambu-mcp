@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { silenceLateMqttError, type LateMqttSocket } from "../client.js";
 import { MockPrinter } from "../mock.js";
-import { createTools, type Tool } from "../tools.js";
+import { createTools, type Tool } from "../tools/index.js";
 import { errorHint, fillMissingPrinterEnv, readLive, resolveStaticFile, runTool } from "../web.js";
 
 describe("web tool runner", () => {
@@ -63,6 +63,7 @@ describe("web tool runner", () => {
     const tools: Tool[] = [
       {
         name: "status",
+        gate: "read",
         description: "fail",
         inputSchema: z.object({}),
         handler: async () => {

@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { PrinterPort } from "./client.js";
 import type { Capabilities } from "./models.js";
-import { createTools } from "./tools.js";
+import { createTools } from "./tools/index.js";
 
 /** Register tools. Does not open MQTT or FTPS. One server, one printer. */
 export function createMcpServer(
