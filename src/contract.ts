@@ -65,6 +65,20 @@ function isWipName(filePath: string): boolean {
   return basename(filePath).toLowerCase().startsWith("wip-");
 }
 
+/** Shared with the CAD stage path. Scratch and wip names are not printable. */
+export function assertRejectedPath(filePath: string): void {
+  if (isScratchPath(filePath)) {
+    throw new Error(
+      `Refuse start-print: path is under scratch/ (${filePath}). Promote out of scratch first.`,
+    );
+  }
+  if (isWipName(filePath)) {
+    throw new Error(
+      `Refuse start-print: wip-* artifacts are not printable (${basename(filePath)}).`,
+    );
+  }
+}
+
 function isBareStl(filePath: string): boolean {
   return /\.stl$/i.test(filePath);
 }
@@ -78,16 +92,7 @@ export function isSliceableInput(filePath: string): boolean {
 }
 
 export function assertPrintableArtifact(filePath: string): ArtifactName {
-  if (isScratchPath(filePath)) {
-    throw new Error(
-      `Refuse start-print: path is under scratch/ (${filePath}). Promote out of scratch first.`,
-    );
-  }
-  if (isWipName(filePath)) {
-    throw new Error(
-      `Refuse start-print: wip-* artifacts are not printable (${basename(filePath)}).`,
-    );
-  }
+  assertRejectedPath(filePath);
   if (isBareStl(filePath)) {
     throw new Error(
       `Refuse start-print: bare STL is not printable. Run slice-hook to produce {part}-{variant}-{rev}.gcode.3mf.`,

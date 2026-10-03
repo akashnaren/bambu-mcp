@@ -13,7 +13,8 @@
     "AGENTS.md",
     "DESIGN.md",
     "harness/**/*",
-    "web/**/*"
+    "web/**/*",
+    "cad/refs/**/*"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -23,7 +24,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
     "dev": "node --import tsx src/index.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prove:cad": "tsx src/cad/prove.ts"
   },
   "engines": {
     "node": ">=20"
