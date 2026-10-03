@@ -1,0 +1,18 @@
+These photographs are the two reference views for the CAD photo gate.
+They are not under the MIT license that covers the rest of this repository.
+A clean skull side was not part of the set. None is invented here.
+
+01-t800-endoskeleton-3q-oberhaus.jpg
+  Wikimedia: File:Terminator.jpg
+  Author: Daniel Oberhaus
+  License: CC BY 2.0
+  Source: https://commons.wikimedia.org/wiki/File:Terminator.jpg
+  Credit: https://www.flickr.com/photos/163370954@N08/32504299827/
+
+02-terminator-salvation-skull-front-ank-kumar.jpg
+  Wikimedia: File:Terminator Skull Head Bust from Terminator Salvation, Earls Court, London (Ank Kumar, Infosys Limited).jpg
+  Author: Ank Kumar
+  License: CC BY-SA 4.0
+  Source: https://commons.wikimedia.org/wiki/File:Terminator_Skull_Head_Bust_from_Terminator_Salvation,_Earls_Court,_London_(Ank_Kumar,_Infosys_Limited).jpg
+
+The research note also names a CC0 full-body fan video. That is another front view, not a side, and it is not bundled.
